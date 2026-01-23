@@ -1,0 +1,203 @@
+"""
+模型管理模块
+
+负责加载和管理AI模型的生命周期
+"""
+
+from typing import Optional, Any
+import torch
+
+from ..utils.logger import get_logger
+from ..config import settings
+
+logger = get_logger(__name__)
+
+
+class ModelManager:
+    """
+    模型管理器
+    
+    单例模式，负责管理文生图和图像编辑模型的加载和推理
+    """
+    
+    _instance: Optional["ModelManager"] = None
+    
+    def __new__(cls) -> "ModelManager":
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+    
+    def __init__(self):
+        if self._initialized:
+            return
+        
+        self._text_to_image_pipeline = None
+        self._image_edit_pipeline = None
+        self._device = None
+        self._dtype = None
+        self._initialized = True
+    
+    @property
+    def text_to_image_pipeline(self) -> Optional[Any]:
+        """文生图模型pipeline"""
+        return self._text_to_image_pipeline
+    
+    @property
+    def image_edit_pipeline(self) -> Optional[Any]:
+        """图像编辑模型pipeline"""
+        return self._image_edit_pipeline
+    
+    @property
+    def device(self) -> str:
+        """当前使用的设备"""
+        if self._device is None:
+            if settings.models.device == "cuda" and torch.cuda.is_available():
+                self._device = "cuda"
+            else:
+                self._device = "cpu"
+        return self._device
+    
+    @property
+    def dtype(self) -> torch.dtype:
+        """当前使用的数据类型"""
+        if self._dtype is None:
+            if self.device == "cuda":
+                self._dtype = torch.bfloat16
+            else:
+                self._dtype = torch.float32
+        return self._dtype
+    
+    @property
+    def is_text_to_image_loaded(self) -> bool:
+        """文生图模型是否已加载"""
+        return self._text_to_image_pipeline is not None
+    
+    @property
+    def is_image_edit_loaded(self) -> bool:
+        """图像编辑模型是否已加载"""
+        return self._image_edit_pipeline is not None
+    
+    @property
+    def gpu_available(self) -> bool:
+        """GPU是否可用"""
+        return torch.cuda.is_available()
+    
+    @property
+    def gpu_count(self) -> int:
+        """可用GPU数量"""
+        return torch.cuda.device_count() if self.gpu_available else 0
+    
+    async def load_models(self) -> None:
+        """
+        加载所有模型
+        
+        在应用启动时调用
+        """
+        logger.info("开始加载模型...")
+        logger.info(f"使用设备: {self.device}, 数据类型: {self.dtype}")
+        
+        await self._load_text_to_image_model()
+        await self._load_image_edit_model()
+        
+        logger.info("✅ 所有模型加载完成！")
+    
+    async def _load_text_to_image_model(self) -> None:
+        """加载文生图模型"""
+        try:
+            logger.info(f"正在加载文生图模型: {settings.models.text_to_image_model}")
+            
+            from diffusers import DiffusionPipeline
+            
+            self._text_to_image_pipeline = DiffusionPipeline.from_pretrained(
+                settings.models.text_to_image_model,
+                torch_dtype=self.dtype,
+                trust_remote_code=True,
+            )
+            
+            if self.device == "cuda":
+                # 注意：enable_model_cpu_offload 会自动管理设备，不需要手动 to("cuda")
+                self._text_to_image_pipeline.enable_model_cpu_offload()
+                self._text_to_image_pipeline.enable_attention_slicing()
+                logger.info("文生图模型已加载 (GPU with CPU offload)")
+            else:
+                logger.info("文生图模型已加载 (CPU)")
+            
+        except Exception as e:
+            logger.error(f"文生图模型加载失败: {e}")
+            raise
+    
+    async def _load_image_edit_model(self) -> None:
+        """加载图像编辑模型"""
+        try:
+            logger.info(f"正在加载图像编辑模型: {settings.models.image_edit_model}")
+            
+            from diffusers import QwenImageEditPlusPipeline
+            
+            self._image_edit_pipeline = QwenImageEditPlusPipeline.from_pretrained(
+                settings.models.image_edit_model,
+                torch_dtype=self.dtype,
+                trust_remote_code=True,
+            )
+            
+            if self.device == "cuda":
+                self._image_edit_pipeline.enable_model_cpu_offload()
+                self._image_edit_pipeline.enable_attention_slicing()
+                logger.info("图像编辑模型已加载 (GPU with CPU offload)")
+            else:
+                logger.info("图像编辑模型已加载 (CPU)")
+            
+        except Exception as e:
+            logger.error(f"图像编辑模型加载失败: {e}")
+            raise
+    
+    async def unload_models(self) -> None:
+        """
+        卸载所有模型
+        
+        释放GPU内存
+        """
+        logger.info("正在卸载模型...")
+        
+        if self._text_to_image_pipeline is not None:
+            del self._text_to_image_pipeline
+            self._text_to_image_pipeline = None
+        
+        if self._image_edit_pipeline is not None:
+            del self._image_edit_pipeline
+            self._image_edit_pipeline = None
+        
+        # 清理GPU缓存
+        if self.gpu_available:
+            torch.cuda.empty_cache()
+        
+        logger.info("模型已卸载")
+    
+    def get_generator(self, seed: int = -1) -> Optional[torch.Generator]:
+        """
+        获取随机数生成器
+        
+        Args:
+            seed: 随机种子，-1表示不使用固定种子
+        
+        Returns:
+            torch.Generator 或 None
+        """
+        if seed == -1:
+            return None
+        
+        generator = torch.Generator(device=self.device)
+        generator.manual_seed(seed)
+        return generator
+
+
+# 全局单例
+_model_manager: Optional[ModelManager] = None
+
+
+def get_model_manager() -> ModelManager:
+    """获取模型管理器单例"""
+    global _model_manager
+    if _model_manager is None:
+        _model_manager = ModelManager()
+    return _model_manager
