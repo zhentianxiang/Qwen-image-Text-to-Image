@@ -15,12 +15,66 @@ let batchImageFile = null;
 // 初始化
 // ==============================================
 document.addEventListener('DOMContentLoaded', () => {
+    initTheme();
     initTabs();
     initSliders();
     initUploads();
     loadSettings();
     checkHealth();
 });
+
+// ==============================================
+// 主题管理
+// ==============================================
+function initTheme() {
+    // 获取保存的主题或使用系统主题
+    const savedTheme = localStorage.getItem('theme');
+    
+    if (savedTheme) {
+        setTheme(savedTheme);
+    } else {
+        // 跟随系统主题
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        setTheme(prefersDark ? 'dark' : 'light');
+    }
+    
+    // 监听系统主题变化
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+        // 只有在"跟随系统"模式下才响应
+        if (!localStorage.getItem('theme')) {
+            setTheme(e.matches ? 'dark' : 'light');
+        }
+    });
+    
+    updateThemeText();
+}
+
+function setTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    updateThemeText();
+}
+
+function getTheme() {
+    return document.documentElement.getAttribute('data-theme') || 'dark';
+}
+
+function toggleTheme() {
+    const currentTheme = getTheme();
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    
+    setTheme(newTheme);
+    localStorage.setItem('theme', newTheme);
+    
+    showToast(`已切换到${newTheme === 'dark' ? '深色' : '浅色'}主题`, 'success');
+}
+
+function updateThemeText() {
+    const themeText = document.getElementById('theme-text');
+    if (themeText) {
+        const currentTheme = getTheme();
+        themeText.textContent = currentTheme === 'dark' ? '切换浅色' : '切换深色';
+    }
+}
 
 // 初始化标签页切换
 function initTabs() {

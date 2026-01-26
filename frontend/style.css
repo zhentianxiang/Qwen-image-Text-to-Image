@@ -1,18 +1,22 @@
 /* ==============================================
    Qwen Image Studio - 样式表
+   支持亮色/暗色主题，跟随系统自动切换
    ============================================== */
 
-:root {
-    /* 主题色 */
-    --primary: #6366f1;
-    --primary-hover: #4f46e5;
-    --primary-light: rgba(99, 102, 241, 0.1);
+/* ==============================================
+   暗色主题（默认）
+   ============================================== */
+:root,
+[data-theme="dark"] {
+    --primary: #818cf8;
+    --primary-hover: #6366f1;
+    --primary-light: rgba(129, 140, 248, 0.15);
     
     /* 背景色 */
-    --bg-dark: #0f0f14;
-    --bg-card: #18181f;
-    --bg-input: #1e1e27;
-    --bg-hover: #252530;
+    --bg-body: #0a0a0f;
+    --bg-card: #141419;
+    --bg-input: #1a1a22;
+    --bg-hover: #22222d;
     
     /* 文字色 */
     --text-primary: #f4f4f5;
@@ -24,19 +28,101 @@
     --border-light: #3f3f46;
     
     /* 状态色 */
+    --success: #34d399;
+    --warning: #fbbf24;
+    --error: #f87171;
+    
+    /* 渐变 */
+    --gradient-primary: linear-gradient(135deg, #818cf8 0%, #a78bfa 100%);
+    --gradient-bg: linear-gradient(180deg, #0a0a0f 0%, #141419 100%);
+    
+    /* 阴影 */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.6);
+    
+    /* 特殊 */
+    --overlay-bg: rgba(10, 10, 15, 0.9);
+    --scrollbar-track: #1a1a22;
+    --scrollbar-thumb: #3f3f46;
+}
+
+/* ==============================================
+   亮色主题
+   ============================================== */
+[data-theme="light"] {
+    --primary: #6366f1;
+    --primary-hover: #4f46e5;
+    --primary-light: rgba(99, 102, 241, 0.1);
+    
+    /* 背景色 */
+    --bg-body: #f8fafc;
+    --bg-card: #ffffff;
+    --bg-input: #f1f5f9;
+    --bg-hover: #e2e8f0;
+    
+    /* 文字色 */
+    --text-primary: #1e293b;
+    --text-secondary: #64748b;
+    --text-muted: #94a3b8;
+    
+    /* 边框 */
+    --border: #e2e8f0;
+    --border-light: #cbd5e1;
+    
+    /* 状态色 */
     --success: #22c55e;
     --warning: #f59e0b;
     --error: #ef4444;
     
     /* 渐变 */
     --gradient-primary: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-    --gradient-bg: linear-gradient(180deg, #0f0f14 0%, #18181f 100%);
+    --gradient-bg: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
     
     /* 阴影 */
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.15);
     
+    /* 特殊 */
+    --overlay-bg: rgba(248, 250, 252, 0.95);
+    --scrollbar-track: #f1f5f9;
+    --scrollbar-thumb: #cbd5e1;
+}
+
+/* 系统跟随 - 亮色模式 */
+@media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+        --primary: #6366f1;
+        --primary-hover: #4f46e5;
+        --primary-light: rgba(99, 102, 241, 0.1);
+        --bg-body: #f8fafc;
+        --bg-card: #ffffff;
+        --bg-input: #f1f5f9;
+        --bg-hover: #e2e8f0;
+        --text-primary: #1e293b;
+        --text-secondary: #64748b;
+        --text-muted: #94a3b8;
+        --border: #e2e8f0;
+        --border-light: #cbd5e1;
+        --success: #22c55e;
+        --warning: #f59e0b;
+        --error: #ef4444;
+        --gradient-primary: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        --gradient-bg: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+        --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+        --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+        --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.15);
+        --overlay-bg: rgba(248, 250, 252, 0.95);
+        --scrollbar-track: #f1f5f9;
+        --scrollbar-thumb: #cbd5e1;
+    }
+}
+
+/* ==============================================
+   通用样式
+   ============================================== */
+:root {
     /* 圆角 */
     --radius-sm: 6px;
     --radius-md: 10px;
@@ -45,6 +131,7 @@
     
     /* 过渡 */
     --transition: 0.2s ease;
+    --transition-theme: 0.3s ease;
 }
 
 * {
@@ -55,10 +142,30 @@
 
 body {
     font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
-    background: var(--bg-dark);
+    background: var(--bg-body);
     color: var(--text-primary);
     line-height: 1.6;
     overflow: hidden;
+    transition: background var(--transition-theme), color var(--transition-theme);
+}
+
+/* 自定义滚动条 */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
 }
 
 /* 主容器 */
@@ -66,6 +173,7 @@ body {
     display: flex;
     height: 100vh;
     background: var(--gradient-bg);
+    transition: background var(--transition-theme);
 }
 
 /* ==============================================
@@ -78,6 +186,7 @@ body {
     display: flex;
     flex-direction: column;
     padding: 20px;
+    transition: background var(--transition-theme), border-color var(--transition-theme);
 }
 
 .logo {
@@ -159,9 +268,12 @@ body {
     padding-top: 16px;
     border-top: 1px solid var(--border);
     margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
-.settings-btn {
+.theme-toggle, .settings-btn {
     display: flex;
     align-items: center;
     gap: 12px;
@@ -176,14 +288,23 @@ body {
     transition: var(--transition);
 }
 
-.settings-btn svg {
+.theme-toggle svg, .settings-btn svg {
     width: 20px;
     height: 20px;
 }
 
-.settings-btn:hover {
+.theme-toggle:hover, .settings-btn:hover {
     background: var(--bg-hover);
     color: var(--text-primary);
+}
+
+.theme-toggle .theme-icon-dark,
+[data-theme="light"] .theme-toggle .theme-icon-light {
+    display: none;
+}
+
+[data-theme="light"] .theme-toggle .theme-icon-dark {
+    display: block;
 }
 
 .status-indicator {
@@ -224,6 +345,7 @@ body {
     flex: 1;
     overflow-y: auto;
     padding: 32px;
+    transition: background var(--transition-theme);
 }
 
 .tab-panel {
@@ -324,6 +446,11 @@ select:focus {
     box-shadow: 0 0 0 3px var(--primary-light);
 }
 
+input::placeholder,
+textarea::placeholder {
+    color: var(--text-muted);
+}
+
 textarea {
     resize: vertical;
     min-height: 80px;
@@ -411,6 +538,7 @@ select {
     text-align: center;
     cursor: pointer;
     transition: var(--transition);
+    background: var(--bg-input);
 }
 
 .upload-area:hover {
@@ -578,6 +706,7 @@ select {
     display: flex;
     align-items: center;
     justify-content: center;
+    transition: background var(--transition-theme), border-color var(--transition-theme);
 }
 
 .result-placeholder {
@@ -643,6 +772,7 @@ select {
 .result-actions button:hover {
     background: var(--primary);
     border-color: var(--primary);
+    color: white;
 }
 
 /* 批量结果 */
@@ -686,7 +816,7 @@ select {
 .modal {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(0, 0, 0, 0.5);
     display: none;
     align-items: center;
     justify-content: center;
@@ -705,6 +835,7 @@ select {
     max-width: 420px;
     border: 1px solid var(--border);
     animation: modalIn 0.3s ease;
+    transition: background var(--transition-theme), border-color var(--transition-theme);
 }
 
 @keyframes modalIn {
@@ -778,7 +909,7 @@ select {
 .loading-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(15, 15, 20, 0.9);
+    background: var(--overlay-bg);
     display: none;
     align-items: center;
     justify-content: center;
