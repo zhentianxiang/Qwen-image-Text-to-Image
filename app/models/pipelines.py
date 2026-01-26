@@ -109,17 +109,29 @@ class ModelManager:
             
             from diffusers import DiffusionPipeline
             
+            # 自动判断最佳加载策略
+            device_map = None
+            if self.device == "cuda" and self.gpu_count > 1:
+                # 多卡环境：使用 balanced 策略分片模型
+                device_map = "balanced"
+                logger.info(f"检测到 {self.gpu_count} 张显卡，将使用 balanced 策略分片加载")
+            
             self._text_to_image_pipeline = DiffusionPipeline.from_pretrained(
                 settings.models.text_to_image_model,
                 torch_dtype=self.dtype,
                 trust_remote_code=True,
+                device_map=device_map,
             )
             
             if self.device == "cuda":
-                # 注意：enable_model_cpu_offload 会自动管理设备，不需要手动 to("cuda")
-                self._text_to_image_pipeline.enable_model_cpu_offload()
-                self._text_to_image_pipeline.enable_attention_slicing()
-                logger.info("文生图模型已加载 (GPU with CPU offload)")
+                if self.gpu_count > 1:
+                    logger.info(f"文生图模型已加载 (Device Map: Balanced, GPUs: {self.gpu_count})")
+                else:
+                    # 单卡环境：由于模型巨大(Qwen-Image)，即使 A40(48G) 也可能 OOM
+                    # 必须使用 CPU Offload 来节省显存
+                    self._text_to_image_pipeline.enable_model_cpu_offload()
+                    self._text_to_image_pipeline.enable_attention_slicing()
+                    logger.info("文生图模型已加载 (Single GPU with CPU Offload)")
             else:
                 logger.info("文生图模型已加载 (CPU)")
             
@@ -134,16 +146,26 @@ class ModelManager:
             
             from diffusers import QwenImageEditPlusPipeline
             
+            # 自动判断最佳加载策略
+            device_map = None
+            if self.device == "cuda" and self.gpu_count > 1:
+                device_map = "balanced"
+            
             self._image_edit_pipeline = QwenImageEditPlusPipeline.from_pretrained(
                 settings.models.image_edit_model,
                 torch_dtype=self.dtype,
                 trust_remote_code=True,
+                device_map=device_map,
             )
             
             if self.device == "cuda":
-                self._image_edit_pipeline.enable_model_cpu_offload()
-                self._image_edit_pipeline.enable_attention_slicing()
-                logger.info("图像编辑模型已加载 (GPU with CPU offload)")
+                if self.gpu_count > 1:
+                    logger.info(f"图像编辑模型已加载 (Device Map: Balanced, GPUs: {self.gpu_count})")
+                else:
+                    # 单卡环境：使用 CPU Offload
+                    self._image_edit_pipeline.enable_model_cpu_offload()
+                    self._image_edit_pipeline.enable_attention_slicing()
+                    logger.info("图像编辑模型已加载 (Single GPU with CPU Offload)")
             else:
                 logger.info("图像编辑模型已加载 (CPU)")
             

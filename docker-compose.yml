@@ -16,7 +16,7 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              device_ids: ["2"] # 使用第三张GPU卡
+              device_ids: ["2"]
               capabilities: [gpu]
     
     ports:
@@ -41,6 +41,8 @@ services:
       # 禁用Intel XPU检测（解决torch.xpu错误）
       - ACCELERATE_TORCH_DEVICE=cuda
       - PYTORCH_ENABLE_MPS_FALLBACK=0
+      # 显存优化
+      - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
       
       # 模型配置
       # 使用HuggingFace在线模型：
