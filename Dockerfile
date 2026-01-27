@@ -55,7 +55,13 @@ RUN useradd --create-home --shell /bin/bash appuser && \
     # 创建缓存目录，避免运行时权限警告
     mkdir -p /home/appuser/.cache/torch/kernels && \
     mkdir -p /home/appuser/.cache/huggingface && \
-    chown -R appuser:appuser /home/appuser/.cache
+    chown -R appuser:appuser /home/appuser/.cache && \
+    # 创建数据目录（用于SQLite数据库）
+    mkdir -p /app/data && \
+    chown -R appuser:appuser /app/data && \
+    # 创建日志目录
+    mkdir -p /app/logs && \
+    chown -R appuser:appuser /app/logs
 USER appuser
 
 # 暴露端口

@@ -211,6 +211,43 @@ class ModelManager:
         generator = torch.Generator(device=self.device)
         generator.manual_seed(seed)
         return generator
+    
+    def clear_pipeline_cache(self) -> None:
+        """
+        清理 Pipeline 内部缓存
+        
+        在推理后调用以释放可能被缓存的中间张量
+        """
+        import gc
+        
+        # 清理文生图 pipeline 的缓存
+        if self._text_to_image_pipeline is not None:
+            # 清理 scheduler 的缓存
+            if hasattr(self._text_to_image_pipeline, 'scheduler'):
+                scheduler = self._text_to_image_pipeline.scheduler
+                if hasattr(scheduler, 'sigmas'):
+                    scheduler.sigmas = None
+                if hasattr(scheduler, 'timesteps'):
+                    scheduler.timesteps = None
+        
+        # 清理图像编辑 pipeline 的缓存
+        if self._image_edit_pipeline is not None:
+            if hasattr(self._image_edit_pipeline, 'scheduler'):
+                scheduler = self._image_edit_pipeline.scheduler
+                if hasattr(scheduler, 'sigmas'):
+                    scheduler.sigmas = None
+                if hasattr(scheduler, 'timesteps'):
+                    scheduler.timesteps = None
+        
+        # 垃圾回收
+        gc.collect()
+        
+        # 清理 CUDA 缓存
+        if self.gpu_available:
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+        
+        logger.debug("Pipeline 缓存已清理")
 
 
 # 全局单例

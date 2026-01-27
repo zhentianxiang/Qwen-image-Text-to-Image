@@ -54,6 +54,9 @@ generation:
 aspect_ratios:
   "1:1": [1024, 1024]
   "16:9": [1664, 928]
+  "16:9-2K": [2560, 1440]  # 常用2K（16:9）
+  "16:9-4K": [3840, 2160]  # 标准4K（16:9）
+  "16:9-2K-影视": [2048, 1080] # 影视行业2K（可选）
   "9:16": [928, 1664]
   "4:3": [1472, 1104]
   "3:4": [1104, 1472]
@@ -85,7 +88,7 @@ logging:
   level: "INFO"
   format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
   # 是否输出到文件
-  file_enabled: false
+  file_enabled: true
   file_path: "./logs/app.log"
 
 cleanup:
@@ -95,3 +98,75 @@ cleanup:
   max_age_hours: 24
   # 清理检查间隔 (分钟)
   check_interval_minutes: 60
+
+# 任务队列配置
+task_queue:
+  # 最大并行工作者数量（默认自动检测GPU数量）
+  # 设为0表示自动检测
+  max_workers: 0
+  
+  # 任务结果保留时间（小时）
+  result_retention_hours: 24
+  
+  # 同步模式超时时间（秒）
+  sync_timeout_seconds: 600
+
+# 用户认证配置
+auth:
+  # 是否启用认证（设为 false 可禁用认证，所有接口无需登录）
+  enabled: true
+  
+  # JWT 密钥（生产环境请修改为随机字符串）
+  # 可通过环境变量 AUTH_SECRET_KEY 覆盖
+  secret_key: "your-secret-key-change-in-production-please"
+  
+  # JWT 算法
+  algorithm: "HS256"
+  
+  # Token 过期时间（分钟），默认 24 小时
+  access_token_expire_minutes: 1440
+  
+  # SQLite 数据库路径
+  # 可通过环境变量 AUTH_DATABASE_URL 覆盖
+  database_url: "sqlite:///./data/users.db"
+  
+  # 默认管理员账号（首次启动时自动创建）
+  # 可通过环境变量 AUTH_DEFAULT_ADMIN_USERNAME 和 AUTH_DEFAULT_ADMIN_PASSWORD 覆盖
+  default_admin_username: "admin"
+  default_admin_password: "admin123"
+  
+  # 是否允许用户自行注册
+  allow_registration: true
+
+# 配额限制配置
+quota:
+  # 是否启用配额限制
+  enabled: true
+  
+  # 默认每日限额（0表示不限制）
+  # 按生成图片数量消耗配额：生成几张图消耗几次
+  default_daily_limit: 100
+  
+  # 默认每月限额（0表示不限制）
+  default_monthly_limit: 3000
+  
+  # 管理员是否不受配额限制
+  admin_unlimited: true
+
+# 存储配置（图片持久化）
+storage:
+  # 输出目录（生成的图片将保存在此目录）
+  # 在 Docker 中会映射到 ./data/outputs
+  output_dir: "/app/data/outputs"
+  
+  # 是否按日期组织子目录（年/月/日）
+  # 启用后目录结构：/app/data/outputs/2026/01/27/
+  organize_by_date: true
+  
+  # 是否按用户ID组织子目录
+  # 启用后目录结构：/app/data/outputs/2026/01/27/user_1/
+  organize_by_user: true
+  
+  # 文件保留天数（0表示永久保留）
+  # 设置后会自动清理超过该天数的旧文件
+  retention_days: 0

@@ -7,6 +7,10 @@
 - 🎨 **文生图** - 根据文字描述生成高质量图像
 - ✏️ **图像编辑** - 基于上传图像进行智能编辑
 - 📦 **批量编辑** - 对同一张图像应用多个编辑效果
+- 🔄 **异步任务队列** - 后台执行，支持多GPU并行推理
+- 🔐 **用户认证** - JWT Token 认证，支持用户管理
+- 📊 **任务历史** - 记录所有任务历史，支持统计分析
+- 💾 **数据持久化** - SQLite 数据库存储用户和任务数据
 - 🖥️ **Web 前端** - 现代化的图形操作界面
 - 🐳 **Docker 部署** - 一键部署，开箱即用
 
@@ -47,15 +51,25 @@ qwen-image/
 │   ├── config.py                 # 配置管理模块
 │   ├── models/                   # 模型管理
 │   │   ├── __init__.py
-│   │   └── pipelines.py          # 模型加载和管理
+│   │   ├── pipelines.py          # 模型加载和管理
+│   │   └── database.py           # 数据库模型（用户表）
 │   ├── routers/                  # API路由
 │   │   ├── __init__.py
 │   │   ├── text_to_image.py      # 文生图端点
 │   │   ├── image_edit.py         # 图像编辑端点
+│   │   ├── tasks.py              # 任务管理端点
+│   │   ├── auth.py               # 认证端点
 │   │   └── info.py               # 系统信息端点
 │   ├── schemas/                  # 数据模型
 │   │   ├── __init__.py
-│   │   └── requests.py           # 请求/响应模型
+│   │   ├── requests.py           # 请求/响应模型
+│   │   ├── user.py               # 用户相关模型
+│   │   └── task.py               # 任务相关模型
+│   ├── services/                 # 服务层
+│   │   ├── __init__.py
+│   │   ├── task_queue.py         # 任务队列管理
+│   │   ├── task_history.py       # 任务历史服务
+│   │   └── auth.py               # 认证服务
 │   └── utils/                    # 工具模块
 │       ├── __init__.py
 │       ├── logger.py             # 日志配置
@@ -69,9 +83,8 @@ qwen-image/
 ├── config/
 │   └── config.yaml               # 主配置文件
 ├── models/                       # 模型目录（需下载）
-│   ├── Qwen-Image-2512/
-│   └── Qwen-Image-Edit-2511/
-├── .env.example                  # 环境变量示例
+├── data/                         # 数据目录（SQLite数据库）
+├── logs/                         # 日志目录
 ├── requirements.txt              # Python依赖
 ├── Dockerfile                    # Docker镜像构建
 ├── docker-compose.yml            # Docker Compose编排
@@ -153,92 +166,240 @@ uvicorn app.main:app --reload
 - API文档：http://localhost:8000/docs
 - 健康检查：http://localhost:8000/health
 
-## 🖼️ 前端界面
+## 🔐 用户认证
 
-项目包含一个现代化的 Web 前端，支持：
+服务默认启用用户认证，未登录用户无法访问生成接口。
 
-- 📝 文生图 - 输入描述文字生成图像
-- ✂️ 图像编辑 - 上传图片 + 描述进行编辑
-- 🔄 批量编辑 - 一张图应用多个编辑效果
-- ⚙️ 参数调节 - 宽高比、推理步数、CFG、种子等
-- 📡 状态监控 - 实时显示后端服务状态
+### 默认管理员账号
 
-**首次使用**：点击左下角「设置」，配置后端 API 地址。
+首次启动会自动创建默认管理员：
+- **用户名**: `admin`
+- **密码**: `admin123`
+
+> ⚠️ **生产环境请务必修改默认密码！**
+
+### 认证流程
+
+```bash
+# 1. 登录获取 Token
+curl -X POST http://localhost:8000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "admin123"}'
+
+# 返回: {"access_token": "eyJ...", "token_type": "bearer", "expires_in": 86400}
+
+# 2. 使用 Token 访问接口
+curl -X POST http://localhost:8000/text-to-image \
+  -H "Authorization: Bearer eyJ..." \
+  -F "prompt=一只可爱的猫"
+```
+
+### 用户注册
+
+如果启用了用户注册（默认启用）：
+
+```bash
+curl -X POST http://localhost:8000/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username": "newuser", "password": "123456"}'
+```
+
+### 禁用认证
+
+如不需要认证，可在配置中禁用：
+
+```yaml
+# config/config.yaml
+auth:
+  enabled: false
+```
+
+或设置环境变量：
+```bash
+AUTH_ENABLED=false
+```
+
+## 🔄 异步任务队列
+
+服务支持异步任务模式，推理任务在后台执行，不阻塞服务器。
+
+### 特性
+
+- **多GPU并行**：自动检测GPU数量，多GPU时可并行执行多个任务
+- **任务排队**：单GPU时任务自动排队
+- **状态查询**：随时查询任务进度
+
+### 使用方式
+
+```bash
+# 1. 提交任务（默认异步模式）
+curl -X POST http://localhost:8000/text-to-image \
+  -H "Authorization: Bearer <token>" \
+  -F "prompt=一只可爱的猫"
+
+# 返回: {"task_id": "xxx", "status_url": "/tasks/xxx", ...}
+
+# 2. 查询任务状态
+curl -H "Authorization: Bearer <token>" \
+  http://localhost:8000/tasks/xxx
+
+# 3. 获取结果
+curl -H "Authorization: Bearer <token>" \
+  http://localhost:8000/tasks/xxx/result --output result.png
+```
+
+### 同步模式
+
+如需同步等待结果，设置 `async_mode=false`：
+
+```bash
+curl -X POST http://localhost:8000/text-to-image \
+  -H "Authorization: Bearer <token>" \
+  -F "prompt=一只可爱的猫" \
+  -F "async_mode=false" \
+  --output cat.png
+```
+
+## 📊 任务历史与统计
+
+所有任务都会记录到数据库，支持查询历史和统计分析。
+
+### 数据库存储内容
+
+- **用户表** (users)
+  - 用户账号信息、密码哈希、权限状态等
+  
+- **任务历史表** (task_history)
+  - 任务ID、类型、提示词、参数
+  - 状态、结果路径、错误信息
+  - 创建时间、开始时间、完成时间、执行时长
+  - 关联用户ID
+
+- **用户配额表** (user_quotas)
+  - 每日/每月使用限额
+  - 使用量统计
+
+### 查询任务历史
+
+```bash
+# 查看我的任务历史
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8000/tasks/history/me?page=1&page_size=20"
+
+# 按状态过滤
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8000/tasks/history/me?status=completed"
+
+# 按任务类型过滤
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8000/tasks/history/me?task_type=text_to_image"
+```
+
+### 统计信息
+
+```bash
+# 我的任务统计
+curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8000/tasks/statistics/me
+
+# 返回:
+# {
+#   "total_tasks": 100,
+#   "completed_tasks": 95,
+#   "failed_tasks": 5,
+#   "text_to_image_count": 60,
+#   "image_edit_count": 40,
+#   "avg_execution_time": 12.5
+# }
+
+# 我的配额信息
+curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8000/tasks/quota/me
+```
+
+### 管理员功能
+
+```bash
+# 查看所有用户的任务历史（管理员）
+curl -H "Authorization: Bearer $ADMIN_TOKEN" \
+  "http://localhost:8000/tasks/history/all?user_id=1"
+
+# 全局统计（管理员）
+curl -H "Authorization: Bearer $ADMIN_TOKEN" \
+  http://localhost:8000/tasks/statistics/global
+
+# 清理旧任务记录（管理员）
+curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" \
+  "http://localhost:8000/tasks/cleanup?max_age_days=30"
+```
 
 ## 📚 API端点
 
 详细文档请查看 [API.md](./API.md)
 
-### 文生图
+### 认证接口
 
-```bash
-POST /text-to-image
-```
+| 端点 | 方法 | 描述 |
+|------|------|------|
+| `/auth/register` | POST | 用户注册 |
+| `/auth/login` | POST | 用户登录 |
+| `/auth/me` | GET | 获取当前用户信息 |
+| `/auth/change-password` | POST | 修改密码 |
+| `/auth/users` | GET | 获取用户列表（管理员） |
 
-参数：
-- `prompt` (必填): 生成图像的描述文本
-- `negative_prompt`: 不希望出现的内容
-- `aspect_ratio`: 宽高比 (1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3)
-- `num_inference_steps`: 推理步数 (20-100)
-- `true_cfg_scale`: CFG尺度 (1.0-10.0)
-- `seed`: 随机种子 (-1为随机)
-- `num_images`: 生成数量 (1-4)
+### 生成接口
 
-### 图像编辑
+| 端点 | 方法 | 描述 |
+|------|------|------|
+| `/text-to-image` | POST | 文生图 |
+| `/image-edit` | POST | 图像编辑 |
+| `/image-edit/batch` | POST | 批量编辑 |
 
-```bash
-POST /image-edit
-```
+### 任务管理
 
-参数：
-- `images` (必填): 上传的图像文件（1-2张）
-- `prompt` (必填): 编辑描述
-- `negative_prompt`: 不希望出现的内容
-- `num_inference_steps`: 推理步数
-- `true_cfg_scale`: CFG尺度
-- `guidance_scale`: 指导尺度
-- `seed`: 随机种子
-- `num_images`: 生成数量
-
-### 批量编辑
-
-```bash
-POST /image-edit/batch
-```
-
-参数：
-- `image` (必填): 上传的单张图像
-- `prompts` (必填): 多个编辑提示，用`|`分隔
-- `negative_prompt`: 不希望出现的内容
-- `num_inference_steps`: 推理步数
-- `seed`: 随机种子
+| 端点 | 方法 | 描述 |
+|------|------|------|
+| `/tasks/queue` | GET | 获取队列信息 |
+| `/tasks/{task_id}` | GET | 获取任务状态 |
+| `/tasks/{task_id}/result` | GET | 获取任务结果 |
+| `/tasks/{task_id}` | DELETE | 取消任务 |
+| `/tasks/history/me` | GET | 我的任务历史 |
+| `/tasks/history/all` | GET | 所有任务历史（管理员） |
+| `/tasks/history/{task_id}` | GET | 任务历史详情 |
+| `/tasks/statistics/me` | GET | 我的任务统计 |
+| `/tasks/statistics/global` | GET | 全局任务统计（管理员） |
+| `/tasks/quota/me` | GET | 我的配额信息 |
+| `/tasks/cleanup` | POST | 清理旧任务（管理员） |
 
 ### 系统信息
 
-```bash
-GET /health          # 健康检查
-GET /models          # 模型信息
-GET /aspect-ratios   # 支持的宽高比
-```
+| 端点 | 方法 | 描述 |
+|------|------|------|
+| `/health` | GET | 健康检查 |
+| `/models` | GET | 模型信息 |
 
 ### 快速测试
 
 ```bash
+# 登录
+TOKEN=$(curl -s -X POST http://localhost:8000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "admin123"}' | jq -r '.access_token')
+
 # 健康检查
 curl http://localhost:8000/health
 
-# 文生图
+# 文生图（异步）
 curl -X POST http://localhost:8000/text-to-image \
-  -F "prompt=一只可爱的橘猫在阳光下打盹" \
-  -F "negative_prompt=模糊,低质量" \
-  -F "aspect_ratio=1:1" \
-  --output cat.png
+  -H "Authorization: Bearer $TOKEN" \
+  -F "prompt=一只可爱的橘猫在阳光下打盹"
 
-# 图像编辑
-curl -X POST http://localhost:8000/image-edit \
-  -F "images=@cat.png" \
-  -F "prompt=给猫戴上一顶帽子" \
-  --output cat_hat.png
+# 文生图（同步）
+curl -X POST http://localhost:8000/text-to-image \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "prompt=一只可爱的橘猫" \
+  -F "async_mode=false" \
+  --output cat.png
 ```
 
 ## ⚙️ 配置说明
@@ -254,8 +415,43 @@ curl -X POST http://localhost:8000/image-edit \
 | `IMAGE_EDIT_MODEL` | Qwen/Qwen-Image-Edit-2511 | 图像编辑模型 |
 | `DEVICE` | cuda | 计算设备 (cuda/cpu) |
 | `LOG_LEVEL` | INFO | 日志级别 |
+| `LOG_FILE_ENABLED` | true | 是否启用日志文件 |
+| `LOG_FILE_PATH` | ./logs/app.log | 日志文件路径 |
 | `MAX_UPLOAD_SIZE_MB` | 20 | 最大上传文件大小 |
 | `CORS_ORIGINS` | ["*"] | CORS允许的源 |
+
+### 认证配置
+
+| 变量名 | 默认值 | 说明 |
+|--------|--------|------|
+| `AUTH_ENABLED` | true | 是否启用认证 |
+| `AUTH_SECRET_KEY` | (需修改) | JWT 密钥 |
+| `AUTH_TOKEN_EXPIRE_MINUTES` | 1440 | Token 过期时间（分钟） |
+| `AUTH_DEFAULT_ADMIN_USERNAME` | admin | 默认管理员用户名 |
+| `AUTH_DEFAULT_ADMIN_PASSWORD` | admin123 | 默认管理员密码 |
+| `AUTH_ALLOW_REGISTRATION` | true | 是否允许用户注册 |
+
+### 任务队列配置
+
+| 变量名 | 默认值 | 说明 |
+|--------|--------|------|
+| `TASK_QUEUE_MAX_WORKERS` | 0 | 最大并行数（0=自动检测GPU数量） |
+| `TASK_RESULT_RETENTION_HOURS` | 24 | 任务结果保留时间 |
+| `SYNC_TIMEOUT_SECONDS` | 600 | 同步模式超时时间 |
+
+### 配额限制配置
+
+| 变量名 | 默认值 | 说明 |
+|--------|--------|------|
+| `QUOTA_ENABLED` | true | 是否启用配额限制 |
+| `QUOTA_DEFAULT_DAILY_LIMIT` | 100 | 默认每日限额 |
+| `QUOTA_DEFAULT_MONTHLY_LIMIT` | 3000 | 默认每月限额 |
+| `QUOTA_ADMIN_UNLIMITED` | true | 管理员是否不受限制 |
+
+> 💡 **配额计算规则**：生成几张图消耗几次配额
+> - 文生图 `num_images=4` → 消耗 4 次配额
+> - 图像编辑 `num_images=2` → 消耗 2 次配额  
+> - 批量编辑 3 个提示 → 消耗 3 次配额
 
 ### 支持的宽高比
 
@@ -268,27 +464,6 @@ curl -X POST http://localhost:8000/image-edit \
 | `3:4` | 1104 × 1472 |
 | `3:2` | 1584 × 1056 |
 | `2:3` | 1056 × 1584 |
-
-### GPU内存优化
-
-服务默认启用以下优化：
-- `enable_model_cpu_offload()`: 自动将未使用的模型部分卸载到CPU
-- `enable_attention_slicing()`: 减少注意力层内存占用
-
-## 🔧 开发
-
-### 代码结构
-
-- `app/config.py`: 配置管理，支持YAML和环境变量
-- `app/models/pipelines.py`: 模型单例管理器
-- `app/routers/`: 按功能分离的API路由
-- `app/utils/`: 通用工具函数
-
-### 添加新功能
-
-1. 在 `app/routers/` 创建新路由文件
-2. 在 `app/routers/__init__.py` 导出路由
-3. 在 `app/main.py` 注册路由
 
 ## 🐳 Docker说明
 
@@ -321,13 +496,17 @@ docker run --rm --gpus all nvidia/cuda:12.4-base nvidia-smi
 | `./models:/app/models` | 模型文件目录 |
 | `./config:/app/config` | 配置文件目录 |
 | `./logs:/app/logs` | 日志文件目录 |
-| `huggingface_cache` | 模型缓存，避免重启后重新下载 |
+| `./data:/app/data` | 数据库文件目录 |
+| `huggingface_cache` | 模型缓存 |
 
 ## 📝 注意事项
 
 1. **GPU内存**: 两个模型同时加载需要较大显存，建议使用24GB以上GPU
 2. **首次启动**: 首次运行会下载模型，可能需要较长时间
-3. **生产环境**: 请修改CORS配置，不要使用`["*"]`
+3. **生产环境**: 
+   - 请修改 `AUTH_SECRET_KEY` 为随机字符串
+   - 请修改默认管理员密码
+   - 请配置具体的 CORS 源，不要使用 `["*"]`
 4. **临时文件**: 服务会自动清理24小时前的生成文件
 5. **Docker健康检查**: start_period 设为120秒，等待模型加载
 

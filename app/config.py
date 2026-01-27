@@ -137,8 +137,8 @@ class LoggingSettings(BaseSettings):
     format: str = Field(
         default="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
-    file_enabled: bool = Field(default=False)
-    file_path: str = Field(default="./logs/app.log")
+    file_enabled: bool = Field(default=True, alias="LOG_FILE_ENABLED")
+    file_path: str = Field(default="./logs/app.log", alias="LOG_FILE_PATH")
     
     model_config = {"env_prefix": "", "extra": "ignore"}
 
@@ -149,6 +149,82 @@ class CleanupSettings(BaseSettings):
     enabled: bool = Field(default=True, alias="AUTO_CLEANUP_ENABLED")
     max_age_hours: int = Field(default=24, alias="TEMP_FILE_MAX_AGE_HOURS")
     check_interval_minutes: int = Field(default=60)
+    
+    model_config = {"env_prefix": "", "extra": "ignore"}
+
+
+class TaskQueueSettings(BaseSettings):
+    """任务队列配置"""
+    
+    # 最大并行工作者数量，0表示自动检测GPU数量
+    max_workers: int = Field(default=0, alias="TASK_QUEUE_MAX_WORKERS")
+    # 任务结果保留时间（小时）
+    result_retention_hours: int = Field(default=24, alias="TASK_RESULT_RETENTION_HOURS")
+    # 同步模式超时时间（秒）
+    sync_timeout_seconds: int = Field(default=600, alias="SYNC_TIMEOUT_SECONDS")
+    
+    model_config = {"env_prefix": "", "extra": "ignore"}
+
+
+class AuthSettings(BaseSettings):
+    """认证配置"""
+    
+    # 是否启用认证
+    enabled: bool = Field(default=True, alias="AUTH_ENABLED")
+    
+    # JWT 配置
+    secret_key: str = Field(
+        default="your-secret-key-change-in-production-please",
+        alias="AUTH_SECRET_KEY"
+    )
+    algorithm: str = Field(default="HS256", alias="AUTH_ALGORITHM")
+    access_token_expire_minutes: int = Field(default=1440, alias="AUTH_TOKEN_EXPIRE_MINUTES")  # 默认24小时
+    
+    # 数据库配置
+    database_url: str = Field(default="sqlite:///./data/users.db", alias="AUTH_DATABASE_URL")
+    
+    # 默认管理员账号（首次启动时创建）
+    default_admin_username: str = Field(default="admin", alias="AUTH_DEFAULT_ADMIN_USERNAME")
+    default_admin_password: str = Field(default="admin123", alias="AUTH_DEFAULT_ADMIN_PASSWORD")
+    
+    # 是否允许用户注册
+    allow_registration: bool = Field(default=True, alias="AUTH_ALLOW_REGISTRATION")
+    
+    model_config = {"env_prefix": "", "extra": "ignore"}
+
+
+class QuotaSettings(BaseSettings):
+    """配额配置"""
+    
+    # 是否启用配额限制
+    enabled: bool = Field(default=True, alias="QUOTA_ENABLED")
+    
+    # 默认每日限额（0表示不限制）
+    default_daily_limit: int = Field(default=100, alias="QUOTA_DEFAULT_DAILY_LIMIT")
+    
+    # 默认每月限额（0表示不限制）
+    default_monthly_limit: int = Field(default=3000, alias="QUOTA_DEFAULT_MONTHLY_LIMIT")
+    
+    # 管理员是否受配额限制
+    admin_unlimited: bool = Field(default=True, alias="QUOTA_ADMIN_UNLIMITED")
+    
+    model_config = {"env_prefix": "", "extra": "ignore"}
+
+
+class StorageSettings(BaseSettings):
+    """存储配置"""
+    
+    # 输出目录（持久化存储生成的图片）
+    output_dir: str = Field(default="/app/data/outputs", alias="STORAGE_OUTPUT_DIR")
+    
+    # 是否按日期组织子目录
+    organize_by_date: bool = Field(default=True, alias="STORAGE_ORGANIZE_BY_DATE")
+    
+    # 是否按用户组织子目录
+    organize_by_user: bool = Field(default=True, alias="STORAGE_ORGANIZE_BY_USER")
+    
+    # 文件保留天数（0表示永久保留）
+    retention_days: int = Field(default=0, alias="STORAGE_RETENTION_DAYS")
     
     model_config = {"env_prefix": "", "extra": "ignore"}
 
@@ -167,6 +243,10 @@ class Settings:
         self.security = SecuritySettings(**yaml_config.get("security", {}))
         self.logging = LoggingSettings(**yaml_config.get("logging", {}))
         self.cleanup = CleanupSettings(**yaml_config.get("cleanup", {}))
+        self.task_queue = TaskQueueSettings(**yaml_config.get("task_queue", {}))
+        self.auth = AuthSettings(**yaml_config.get("auth", {}))
+        self.quota = QuotaSettings(**yaml_config.get("quota", {}))
+        self.storage = StorageSettings(**yaml_config.get("storage", {}))
         
         # 加载宽高比配置
         self._aspect_ratios = yaml_config.get("aspect_ratios", {

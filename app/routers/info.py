@@ -2,11 +2,19 @@
 信息查询路由模块
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from ..config import settings
 from ..models import get_model_manager
+from ..models.database import User
 from ..schemas import HealthResponse, ModelInfo, ModelsResponse
+from ..services.auth import get_current_active_admin_user
+from ..utils.memory_utils import (
+    get_memory_info,
+    cleanup_memory,
+    get_gpu_details,
+    get_system_info,
+)
 
 router = APIRouter(tags=["系统信息"])
 
@@ -62,3 +70,62 @@ async def get_aspect_ratios():
     返回所有支持的图像宽高比及其对应的像素尺寸
     """
     return settings.aspect_ratios
+
+
+@router.get("/memory")
+async def get_memory_status():
+    """
+    获取内存使用状态
+    
+    返回 CPU 和 GPU 内存的当前使用情况
+    """
+    return get_memory_info()
+
+
+@router.post("/memory/cleanup")
+async def trigger_memory_cleanup(
+    aggressive: bool = False,
+    _: User = Depends(get_current_active_admin_user),
+):
+    """
+    手动触发内存清理（仅管理员）
+    
+    Args:
+        aggressive: 是否使用激进清理模式（更彻底但耗时更长）
+    
+    Returns:
+        清理前后的内存信息
+    """
+    result = cleanup_memory(aggressive=aggressive)
+    return {
+        "message": "内存清理完成",
+        "aggressive_mode": aggressive,
+        "before": result["before"],
+        "after": result["after"],
+        "freed": {
+            "cpu_gb": result["freed_cpu_gb"],
+            "gpu_gb": result["freed_gpu_gb"],
+        }
+    }
+
+
+@router.get("/gpu")
+async def get_gpu_status():
+    """
+    获取 GPU 详细状态
+    
+    返回每个 GPU 的内存使用、使用率、温度、功耗等信息
+    """
+    return get_gpu_details()
+
+
+@router.get("/system")
+async def get_system_status(
+    _: User = Depends(get_current_active_admin_user),
+):
+    """
+    获取系统综合信息（仅管理员）
+    
+    返回 CPU、内存、GPU、操作系统、PyTorch 等完整系统信息
+    """
+    return get_system_info()

@@ -24,3 +24,16 @@ Pillow>=10.0.0
 
 # 可选: 环境变量管理
 python-dotenv>=1.0.0
+
+# 数据库
+sqlalchemy>=2.0.0
+aiosqlite>=0.19.0
+
+# 认证
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+# 注意: bcrypt 4.1+ 与 passlib 不兼容，需要限制版本
+bcrypt>=4.0.0,<4.1.0
+
+# 系统监控
+psutil>=5.9.0
