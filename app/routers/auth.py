@@ -1,15 +1,17 @@
 """
 认证路由模块
 
-提供用户注册、登录、Token 刷新等接口
+提供用户注册、登录、Token 刷新、密码重置等接口
 """
 
 from datetime import timedelta
-from typing import List
+from typing import List, Optional
+import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Body
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from pydantic import BaseModel, Field
 
 from ..config import settings
 from ..models.database import User, get_db
@@ -32,13 +34,26 @@ from ..services.auth import (
     get_user_by_username,
 )
 from ..utils.logger import get_logger
+from ..utils.rate_limit import limiter
+from ..utils.email_utils import send_verification_email, send_password_reset_email
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/auth", tags=["认证"])
 
 
+class PasswordResetRequest(BaseModel):
+    email: str
+    username: str
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    new_password: str = Field(..., min_length=6, max_length=100)
+
+
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit(settings.security.rate_limit.register_limit)
 async def register(
+    request: Request,
     user_data: UserCreate,
     db: AsyncSession = Depends(get_db),
 ) -> User:
@@ -47,7 +62,7 @@ async def register(
     
     - **username**: 用户名（3-50字符）
     - **password**: 密码（至少6字符）
-    - **email**: 邮箱（可选）
+    - **email**: 邮箱（必须）
     """
     # 检查是否允许注册
     if not settings.auth.allow_registration:
@@ -64,16 +79,33 @@ async def register(
             detail="用户名已存在"
         )
     
-    # 检查邮箱是否已存在
+    # 检查邮箱注册数量限制
     if user_data.email:
+        # 强制转换为小写
+        user_data.email = user_data.email.lower()
+        
+        # 统计该邮箱已注册的账号数量
+        # 注意: select(func.count()) 需要导入 func
+        from sqlalchemy import func
         result = await db.execute(
-            select(User).where(User.email == user_data.email)
+            select(func.count()).select_from(User).where(User.email == user_data.email)
         )
-        if result.scalar_one_or_none():
+        count = result.scalar_one()
+        
+        if count >= 5:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="邮箱已被使用"
+                detail="该邮箱已达到最大注册账号数量限制(5个)"
             )
+    elif settings.email.enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="请输入有效的邮箱地址"
+        )
+    
+    # 生成验证Token
+    verification_token = uuid.uuid4().hex if settings.email.enabled else None
+    is_verified = not settings.email.enabled # 如果未启用邮件，则自动验证通过
     
     # 创建用户
     new_user = User(
@@ -82,6 +114,8 @@ async def register(
         hashed_password=get_password_hash(user_data.password),
         is_active=True,
         is_admin=False,
+        is_verified=is_verified,
+        verification_token=verification_token,
     )
     
     db.add(new_user)
@@ -90,21 +124,26 @@ async def register(
     
     logger.info(f"新用户注册: {new_user.username}")
     
+    # 发送验证邮件
+    if settings.email.enabled and user_data.email:
+        try:
+            await send_verification_email(user_data.email, verification_token, user_data.username, str(request.base_url))
+        except Exception as e:
+            logger.error(f"验证邮件发送失败: {e}")
+            # 不回滚注册，允许用户重发
+    
     return new_user
 
 
 @router.post("/login", response_model=Token)
+@limiter.limit(settings.security.rate_limit.login_limit)
 async def login(
+    request: Request,
     user_data: UserLogin,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """
     用户登录
-    
-    - **username**: 用户名
-    - **password**: 密码
-    
-    返回 JWT Token，有效期默认24小时
     """
     user = await authenticate_user(db, user_data.username, user_data.password)
     
@@ -113,6 +152,13 @@ async def login(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="用户名或密码错误",
             headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # 检查邮箱验证状态
+    if settings.email.enabled and not user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="请先验证您的邮箱",
         )
     
     # 创建 Token
@@ -135,17 +181,148 @@ async def login(
     }
 
 
+@router.post("/forgot-password")
+@limiter.limit("3/hour")
+async def forgot_password(
+    request: Request,
+    data: PasswordResetRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    忘记密码 - 发送重置邮件
+    """
+    if not settings.email.enabled:
+        raise HTTPException(status_code=400, detail="邮件服务未启用")
+        
+    email_lower = data.email.lower()
+    result = await db.execute(
+        select(User).where(User.email == email_lower)
+    )
+    user = result.scalar_one_or_none()
+    
+    if not user or user.username != data.username:
+        # 为了安全，不提示用户不存在或不匹配
+        return {"message": "如果该邮箱和用户名匹配，重置邮件已发送"}
+        
+    # 生成重置Token (复用 verification_token 字段)
+    reset_token = uuid.uuid4().hex
+    user.verification_token = reset_token
+    await db.commit()
+    
+    try:
+        await send_password_reset_email(user.email, reset_token, user.username, str(request.base_url))
+    except Exception as e:
+        logger.error(f"重置邮件发送失败: {e}")
+        raise HTTPException(status_code=500, detail="邮件发送失败")
+        
+    return {"message": "重置邮件已发送，请检查您的邮箱"}
+
+
+@router.post("/reset-password")
+@limiter.limit("5/minute")
+async def reset_password(
+    request: Request,
+    data: PasswordResetConfirm,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    重置密码 - 使用 Token
+    """
+    result = await db.execute(
+        select(User).where(User.verification_token == data.token)
+    )
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        raise HTTPException(status_code=400, detail="无效或过期的重置链接")
+        
+    # 重置密码
+    user.hashed_password = get_password_hash(data.new_password)
+    user.verification_token = None # 清除 Token
+    # 如果用户之前未验证，重置密码可视作已验证？通常是的，因为他们访问了邮箱
+    if not user.is_verified:
+        user.is_verified = True
+        
+    await db.commit()
+    
+    logger.info(f"用户密码已重置: {user.username}")
+    return {"message": "密码重置成功，请使用新密码登录"}
+
+
+@router.get("/verify-email")
+async def verify_email(
+    token: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    验证邮箱
+    """
+    result = await db.execute(
+        select(User).where(User.verification_token == token)
+    )
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="无效的验证链接"
+        )
+        
+    if user.is_verified:
+        return {"message": "邮箱已验证，请直接登录"}
+        
+    user.is_verified = True
+    user.verification_token = None
+    await db.commit()
+    
+    return {"message": "邮箱验证成功，您现在可以登录了"}
+
+
+@router.post("/resend-verification-email")
+@limiter.limit("3/hour") # 限制重发频率
+async def resend_verification_email(
+    request: Request,
+    email: str = Body(..., embed=True), # 接收 {"email": "..."}
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    重发验证邮件
+    """
+    if not settings.email.enabled:
+        raise HTTPException(status_code=400, detail="邮件服务未启用")
+        
+    email_lower = email.lower()
+    result = await db.execute(
+        select(User).where(User.email == email_lower)
+    )
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        return {"message": "如果该邮箱已注册，验证邮件已发送"}
+        
+    if user.is_verified:
+        return {"message": "该账号已验证"}
+        
+    # 生成新Token
+    new_token = uuid.uuid4().hex
+    user.verification_token = new_token
+    await db.commit()
+    
+    try:
+        await send_verification_email(email_lower, new_token, user.username)
+    except Exception as e:
+        logger.error(f"邮件发送失败: {e}")
+        raise HTTPException(status_code=500, detail="邮件发送失败，请稍后重试")
+        
+    return {"message": "验证邮件已发送"}
+
+
 @router.get("/me", response_model=UserResponse)
 async def get_me(
     current_user: User = Depends(get_current_active_user),
 ) -> User:
     """
     获取当前登录用户信息
-    
-    需要在请求头中携带 Token：
-    ```
-    Authorization: Bearer <token>
-    ```
     """
     return current_user
 
@@ -158,9 +335,6 @@ async def update_me(
 ) -> User:
     """
     更新当前用户信息
-    
-    - **email**: 新邮箱（可选）
-    - **password**: 新密码（可选，至少6字符）
     """
     # 更新邮箱
     if user_data.email is not None:
@@ -198,9 +372,6 @@ async def change_password(
 ) -> dict:
     """
     修改密码
-    
-    - **old_password**: 原密码
-    - **new_password**: 新密码（至少6字符）
     """
     # 验证原密码
     if not verify_password(password_data.old_password, current_user.hashed_password):
@@ -229,9 +400,6 @@ async def list_users(
 ) -> List[User]:
     """
     获取所有用户列表（管理员）
-    
-    - **skip**: 跳过记录数
-    - **limit**: 返回记录数限制
     """
     result = await db.execute(
         select(User).offset(skip).limit(limit)
@@ -247,10 +415,7 @@ async def toggle_user_active(
 ) -> dict:
     """
     启用/禁用用户（管理员）
-    
-    - **user_id**: 用户ID
     """
-    # 不能禁用自己
     if user_id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -289,10 +454,7 @@ async def toggle_user_admin(
 ) -> dict:
     """
     设置/取消管理员权限（管理员）
-    
-    - **user_id**: 用户ID
     """
-    # 不能取消自己的管理员权限
     if user_id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -331,10 +493,7 @@ async def delete_user(
 ) -> dict:
     """
     删除用户（管理员）
-    
-    - **user_id**: 用户ID
     """
-    # 不能删除自己
     if user_id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

@@ -44,8 +44,7 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true })
         try {
           await authApi.register({ username, password, email })
-          // 注册成功后自动登录
-          await get().login(username, password)
+          // 注册成功，不自动登录（因为需要邮箱验证）
         } finally {
           set({ isLoading: false })
         }

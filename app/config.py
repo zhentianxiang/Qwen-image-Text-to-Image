@@ -43,9 +43,10 @@ class AppSettings(BaseSettings):
     app_version: str = Field(default="1.0.0")
     host: str = Field(default="0.0.0.0", alias="APP_HOST")
     port: int = Field(default=8000, alias="APP_PORT")
+    base_url: str = Field(default="http://localhost:8000", alias="APP_BASE_URL")
     debug: bool = Field(default=False, alias="APP_DEBUG")
     
-    model_config = {"env_prefix": "", "extra": "ignore"}
+    model_config = {"env_prefix": "", "extra": "ignore", "populate_by_name": True}
 
 
 class ModelSettings(BaseSettings):
@@ -82,6 +83,17 @@ class GenerationSettings(BaseSettings):
     model_config = {"env_prefix": "", "extra": "ignore"}
 
 
+class RateLimitSettings(BaseSettings):
+    """速率限制配置"""
+    enabled: bool = Field(default=True, alias="RATE_LIMIT_ENABLED")
+    global_limit: str = Field(default="100/minute", alias="RATE_LIMIT_GLOBAL")
+    login_limit: str = Field(default="5/minute", alias="RATE_LIMIT_LOGIN")
+    register_limit: str = Field(default="3/hour", alias="RATE_LIMIT_REGISTER")
+    generation_limit: str = Field(default="10/minute", alias="RATE_LIMIT_GENERATION")
+    
+    model_config = {"env_prefix": "", "extra": "ignore"}
+
+
 class SecuritySettings(BaseSettings):
     """安全配置"""
     
@@ -95,6 +107,9 @@ class SecuritySettings(BaseSettings):
     cors_allow_credentials: bool = Field(default=True, alias="CORS_ALLOW_CREDENTIALS")
     cors_allow_methods: List[str] = Field(default=["*"])
     cors_allow_headers: List[str] = Field(default=["*"])
+    
+    # Rate Limiting
+    rate_limit: RateLimitSettings = Field(default_factory=RateLimitSettings)
     
     model_config = {"env_prefix": "", "extra": "ignore"}
     
@@ -127,7 +142,26 @@ class SecuritySettings(BaseSettings):
             else:
                 data["allowed_image_types"] = [s.strip() for s in types_value.split(",")]
         
+        # Handle nested rate_limit config if passed as dict
+        if "rate_limit" in data and isinstance(data["rate_limit"], dict):
+            data["rate_limit"] = RateLimitSettings(**data["rate_limit"])
+            
         super().__init__(**data)
+
+
+class EmailSettings(BaseSettings):
+    """邮件配置"""
+    enabled: bool = Field(default=False, alias="EMAIL_ENABLED")
+    smtp_server: str = Field(default="smtp.qq.com", alias="EMAIL_SMTP_SERVER")
+    smtp_port: int = Field(default=587, alias="EMAIL_SMTP_PORT")
+    smtp_username: str = Field(default="", alias="EMAIL_SMTP_USERNAME")
+    smtp_password: str = Field(default="", alias="EMAIL_SMTP_PASSWORD")
+    from_email: str = Field(default="", alias="EMAIL_FROM_EMAIL")
+    from_name: str = Field(default="Qwen Image Service", alias="EMAIL_FROM_NAME")
+    tls: bool = Field(default=True, alias="EMAIL_TLS")
+    ssl: bool = Field(default=False, alias="EMAIL_SSL")
+    
+    model_config = {"env_prefix": "", "extra": "ignore", "populate_by_name": True}
 
 
 class LoggingSettings(BaseSettings):
@@ -249,6 +283,7 @@ class Settings:
         self.auth = AuthSettings(**yaml_config.get("auth", {}))
         self.quota = QuotaSettings(**yaml_config.get("quota", {}))
         self.storage = StorageSettings(**yaml_config.get("storage", {}))
+        self.email = EmailSettings(**yaml_config.get("email", {}))
         
         # 加载宽高比配置
         self._aspect_ratios = yaml_config.get("aspect_ratios", {

@@ -48,66 +48,12 @@ services:
       # 显存优化
       - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
       
-      # 模型配置
-      # 使用HuggingFace在线模型：
-      #- TEXT_TO_IMAGE_MODEL=Qwen/Qwen-Image-2512
-      #- IMAGE_EDIT_MODEL=Qwen/Qwen-Image-Edit-2511
-      # 或使用本地模型路径（取消注释）：
-      - TEXT_TO_IMAGE_MODEL=/app/models/Qwen-Image-2512
-      - IMAGE_EDIT_MODEL=/app/models/Qwen-Image-Edit-2511
-      - MODELS_DIR=/app/models
-      - DEVICE=cuda
-      
-      # HuggingFace配置（可选，如果需要私有模型）
-      # - HF_TOKEN=your_token_here
-      # 使用HuggingFace镜像（国内加速）
-      - HF_ENDPOINT=https://hf-mirror.com
-      
-      # 日志配置
-      - LOG_LEVEL=INFO
-      - LOG_FILE_ENABLED=true
-      - LOG_FILE_PATH=/app/logs/app.log
-      
-      # 安全配置
-      - MAX_UPLOAD_SIZE_MB=20
-      # 生产环境请修改CORS_ORIGINS
-      #- CORS_ORIGINS=["*"]
-      - CORS_ORIGINS=["*"]
-      
-      # 临时文件清理
-      - AUTO_CLEANUP_ENABLED=true
-      - TEMP_FILE_MAX_AGE_HOURS=24
-      
-      # 用户认证配置
-      - AUTH_ENABLED=true
-      # 生产环境请修改为随机字符串！
+      # 安全敏感配置（建议保留在环境变量中，生产环境通过 .env 或 secrets 注入）
       - AUTH_SECRET_KEY=your-secret-key-change-in-production-please
-      # Token 过期时间（分钟），默认 24 小时
-      - AUTH_TOKEN_EXPIRE_MINUTES=1440
-      # 默认管理员账号（首次启动自动创建）
-      - AUTH_DEFAULT_ADMIN_USERNAME=admin
       - AUTH_DEFAULT_ADMIN_PASSWORD=admin123
-      # 是否允许用户自行注册
-      - AUTH_ALLOW_REGISTRATION=true
       
-      # 配额限制配置
-      - QUOTA_ENABLED=true
-      # 默认每日限额（生成几张图消耗几次）
-      - QUOTA_DEFAULT_DAILY_LIMIT=100
-      # 默认每月限额
-      - QUOTA_DEFAULT_MONTHLY_LIMIT=3000
-      # 管理员是否不受配额限制
-      - QUOTA_ADMIN_UNLIMITED=true
-      
-      # 存储配置（图片持久化）
-      # 输出目录（会保存到 ./data/outputs）
-      - STORAGE_OUTPUT_DIR=/app/data/outputs
-      # 是否按日期组织目录（年/月/日）
-      - STORAGE_ORGANIZE_BY_DATE=true
-      # 是否按用户ID组织目录
-      - STORAGE_ORGANIZE_BY_USER=true
-      # 文件保留天数（0表示永久保留）
-      - STORAGE_RETENTION_DAYS=0
+      # 其他配置已移至 config/config.yaml
+      # 如果需要覆盖配置文件中的设置，仍可在此处添加对应的环境变量
     
     # 健康检查
     healthcheck:

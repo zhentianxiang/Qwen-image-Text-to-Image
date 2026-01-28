@@ -106,6 +106,11 @@ export function LoginForm() {
             {errors.password && (
               <p className="text-sm text-destructive">{errors.password.message}</p>
             )}
+            <div className="text-right">
+              <Link to="/forgot-password" className="text-sm text-muted-foreground hover:text-primary hover:underline">
+                忘记密码？
+              </Link>
+            </div>
           </div>
         </CardContent>
         <CardFooter className="flex flex-col gap-4">

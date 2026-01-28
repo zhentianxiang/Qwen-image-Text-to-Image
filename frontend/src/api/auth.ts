@@ -12,6 +12,29 @@ export const authApi = {
     return response.data
   },
 
+  verifyEmail: async (token: string): Promise<{ message: string }> => {
+    const response = await apiClient.get<{ message: string }>('/auth/verify-email', { params: { token } })
+    return response.data
+  },
+
+  resendVerificationEmail: async (email: string): Promise<{ message: string }> => {
+    const response = await apiClient.post<{ message: string }>('/auth/resend-verification-email', { email })
+    return response.data
+  },
+
+  forgotPassword: async (username: string, email: string): Promise<{ message: string }> => {
+    const response = await apiClient.post<{ message: string }>('/auth/forgot-password', { username, email })
+    return response.data
+  },
+
+  resetPassword: async (token: string, newPassword: string): Promise<{ message: string }> => {
+    const response = await apiClient.post<{ message: string }>('/auth/reset-password', { 
+      token, 
+      new_password: newPassword 
+    })
+    return response.data
+  },
+
   getMe: async (): Promise<User> => {
     const response = await apiClient.get<User>('/auth/me')
     return response.data

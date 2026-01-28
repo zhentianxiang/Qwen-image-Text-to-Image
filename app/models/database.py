@@ -31,6 +31,8 @@ class User(Base):
     hashed_password = Column(String(255), nullable=False)
     is_active = Column(Boolean, default=True)
     is_admin = Column(Boolean, default=False)
+    is_verified = Column(Boolean, default=False)  # 邮箱验证状态
+    verification_token = Column(String(100), nullable=True)  # 验证Token
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -224,6 +226,7 @@ async def create_default_admin() -> None:
             hashed_password=get_password_hash(settings.auth.default_admin_password),
             is_active=True,
             is_admin=True,
+            is_verified=True, # 管理员默认已验证
         )
         
         db.add(admin_user)

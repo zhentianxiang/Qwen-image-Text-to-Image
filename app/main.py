@@ -8,8 +8,12 @@ import asyncio
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi.errors import RateLimitExceeded
 
 from .config import settings
 from .models import get_model_manager
@@ -22,9 +26,9 @@ from .routers import (
     auth_router,
 )
 from .services import get_task_queue
+from .utils.rate_limit import limiter
 from .utils.logger import init_logging, get_logger
 from .utils.image_utils import cleanup_old_temp_files
-
 
 # 初始化全局日志配置（所有模块的日志都会输出到控制台和文件）
 init_logging(
@@ -35,6 +39,25 @@ init_logging(
 )
 logger = get_logger("qwen_image")
 
+async def custom_rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    """自定义频率限制异常处理"""
+    # exc.detail 包含类似 "5 per 1 minute" 的信息
+    detail = str(exc.detail)
+    message = f"请求过于频繁。"
+    
+    if "minute" in detail:
+        message += "请在一分钟后再试。"
+    elif "hour" in detail:
+        message += "请在一小时后再试。"
+    elif "day" in detail:
+        message += "请明天再试。"
+    else:
+        message += f"请稍后再试 (触发限制: {detail})。"
+        
+    return JSONResponse(
+        status_code=429,
+        content={"detail": message}
+    )
 
 async def cleanup_task():
     """定期清理临时文件的后台任务"""
@@ -131,6 +154,11 @@ app = FastAPI(
     version=settings.app.app_version,
     lifespan=lifespan,
 )
+
+# 注册 Rate Limiter
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, custom_rate_limit_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 # 添加CORS中间件
 # 注意：当 allow_origins=["*"] 时，allow_credentials 必须为 False（CORS规范要求）

@@ -35,5 +35,11 @@ passlib[bcrypt]>=1.7.4
 # 注意: bcrypt 4.1+ 与 passlib 不兼容，需要限制版本
 bcrypt>=4.0.0,<4.1.0
 
+# 邮件发送
+fastapi-mail>=1.4.1
+
+# 速率限制
+slowapi>=0.1.9
+
 # 系统监控
 psutil>=5.9.0
