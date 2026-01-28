@@ -68,13 +68,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     else:
         logger.info("用户认证已禁用")
     
-    # 加载模型
+    # 加载模型 (仅在线程模式下加载，进程模式由Worker按需加载)
     model_manager = get_model_manager()
-    try:
-        await model_manager.load_models()
-    except Exception as e:
-        logger.error(f"模型加载失败: {e}")
-        raise
+    logger.info(f"当前任务执行模式: {settings.task_queue.execution_mode}")
+    
+    if settings.task_queue.execution_mode == "process":
+        logger.info("执行模式为 'process'，跳过主进程模型加载。模型将由 Worker 进程按需加载。")
+    else:
+        try:
+            await model_manager.load_models()
+        except Exception as e:
+            logger.error(f"模型加载失败: {e}")
+            raise
     
     # 启动任务队列
     task_queue = get_task_queue()

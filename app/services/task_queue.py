@@ -285,20 +285,101 @@ class TaskQueue:
         # 更新数据库状态
         await self._update_task_in_db(task.task_id, status="running", started_at=task_result.started_at)
         
-        logger.info(f"开始执行任务 {task.task_id} | GPU: {gpu_id if self._gpu_count > 0 else 'CPU'}")
+        logger.info(f"开始执行任务 {task.task_id} | GPU: {gpu_id if self._gpu_count > 0 else 'CPU'} | Mode: {settings.task_queue.execution_mode}")
         
         try:
-            # 在线程池中执行推理任务（避免阻塞事件循环）
-            loop = asyncio.get_event_loop()
+            result = None
             
-            # 设置当前任务使用的 GPU
-            if self._gpu_count > 0:
-                task.kwargs["_gpu_id"] = gpu_id
-            
-            result = await loop.run_in_executor(
-                self._executor,
-                lambda: task.func(*task.args, **task.kwargs)
-            )
+            # 模式 1: 独立进程模式 (彻底释放内存)
+            if settings.task_queue.execution_mode == "process":
+                import sys
+                import json
+                import tempfile
+                import os
+                
+                # 准备参数文件
+                # 注入 GPU ID 到参数中
+                if self._gpu_count > 0:
+                    task.kwargs["_gpu_id"] = gpu_id
+                    
+                # 创建临时参数文件
+                with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json', encoding='utf-8') as tmp:
+                    json.dump(task.kwargs, tmp)
+                    args_file = tmp.name
+                
+                # 创建临时输出文件
+                with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json', encoding='utf-8') as tmp_out:
+                    output_file = tmp_out.name
+
+                try:
+                    # 构建命令
+                    cmd = [
+                        sys.executable,
+                        "-m", "app.inference_worker",
+                        "--task-type", task.task_type or "text_to_image", # 默认为 text_to_image 如果未指定
+                        "--args-file", args_file,
+                        "--output-file", output_file
+                    ]
+                    
+                    logger.debug(f"Executing subprocess: {' '.join(cmd)}")
+                    
+                    # 运行子进程
+                    proc = await asyncio.create_subprocess_exec(
+                        *cmd,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE
+                    )
+                    
+                    logger.info(f"Worker subprocess started | PID: {proc.pid} | Task: {task.task_id}")
+                    
+                    stdout, stderr = await proc.communicate()
+                    
+                    logger.info(f"Worker subprocess finished | PID: {proc.pid} | Return Code: {proc.returncode}")
+                    
+                    if proc.returncode != 0:
+                        error_msg = stderr.decode().strip()
+                        logger.error(f"Worker process failed (code {proc.returncode}): {error_msg}")
+                        raise RuntimeError(f"Worker process error: {error_msg}")
+                        
+                    # 读取输出文件
+                    try:
+                        with open(output_file, 'r', encoding='utf-8') as f:
+                            content = f.read().strip()
+                            if not content:
+                                raise ValueError("Empty output file")
+                            worker_output = json.loads(content)
+                    except Exception as e:
+                        logger.error(f"Failed to read/parse worker output from {output_file}: {e}")
+                        # 尝试从 stdout/stderr 获取更多信息
+                        logger.error(f"STDOUT: {stdout.decode().strip()}")
+                        logger.error(f"STDERR: {stderr.decode().strip()}")
+                        raise RuntimeError(f"Failed to get result from worker: {e}")
+                        
+                    if worker_output.get("status") == "failed":
+                        raise RuntimeError(worker_output.get("error", "Unknown worker error"))
+                        
+                    result = worker_output.get("result")
+                    
+                finally:
+                    # 清理临时文件
+                    if os.path.exists(args_file):
+                        os.unlink(args_file)
+                    if os.path.exists(output_file):
+                        os.unlink(output_file)
+
+            # 模式 2: 线程池模式 (默认, 响应快但内存不释放)
+            else:
+                # 在线程池中执行推理任务（避免阻塞事件循环）
+                loop = asyncio.get_event_loop()
+                
+                # 设置当前任务使用的 GPU
+                if self._gpu_count > 0:
+                    task.kwargs["_gpu_id"] = gpu_id
+                
+                result = await loop.run_in_executor(
+                    self._executor,
+                    lambda: task.func(*task.args, **task.kwargs)
+                )
             
             # 更新状态为完成
             task_result.status = TaskStatus.COMPLETED
@@ -611,24 +692,38 @@ class TaskQueue:
         logger.info(f"任务 {task_id} 已取消")
         return True
     
-    def get_queue_info(self) -> Dict[str, Any]:
-        """获取队列信息"""
-        pending = sum(1 for t in self._tasks.values() if t.status == TaskStatus.PENDING)
-        running = sum(1 for t in self._tasks.values() if t.status == TaskStatus.RUNNING)
-        completed = sum(1 for t in self._tasks.values() if t.status == TaskStatus.COMPLETED)
-        failed = sum(1 for t in self._tasks.values() if t.status == TaskStatus.FAILED)
+    def get_queue_info(self, user_id: Optional[int] = None) -> Dict[str, Any]:
+        """
+        获取队列信息
+        
+        Args:
+            user_id: 可选的用户ID，如果提供则只统计该用户的任务
+        """
+        # 如果指定了用户，只统计该用户的任务
+        if user_id is not None:
+            tasks_to_count = [t for t in self._tasks.values() if t.user_id == user_id]
+        else:
+            tasks_to_count = self._tasks.values()
+
+        pending = sum(1 for t in tasks_to_count if t.status == TaskStatus.PENDING)
+        running = sum(1 for t in tasks_to_count if t.status == TaskStatus.RUNNING)
+        completed = sum(1 for t in tasks_to_count if t.status == TaskStatus.COMPLETED)
+        failed = sum(1 for t in tasks_to_count if t.status == TaskStatus.FAILED)
+        
+        # queue_size 仍然返回全局排队数量，因为它反映了系统繁忙程度
+        # 但 tasks 字典中的统计数据是针对特定用户的
         
         return {
             "is_running": self._running,
             "gpu_count": self._gpu_count,
             "max_workers": self._max_workers,
-            "queue_size": self.queue_size,
+            "queue_size": self.queue_size, # 全局队列长度
             "tasks": {
                 "pending": pending,
                 "running": running,
                 "completed": completed,
                 "failed": failed,
-                "total": len(self._tasks),
+                "total": len(tasks_to_count),
             }
         }
     

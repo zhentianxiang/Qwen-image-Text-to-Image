@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@tanstack/react-query"
 import { 
   Cpu, 
   HardDrive, 
@@ -9,8 +9,7 @@ import {
   Zap,
   RefreshCw,
   Server,
-  Monitor,
-  Trash2
+  Monitor
 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -19,7 +18,6 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { LoadingSpinner } from "@/components/common/LoadingSpinner"
 import { systemApi } from "@/api"
-import { useToast } from "@/hooks/useToast"
 
 interface GpuInfo {
   index: number
@@ -206,8 +204,6 @@ function GpuCard({ gpu }: { gpu: GpuInfo }) {
 }
 
 export default function SystemInfoPage() {
-  const { toast } = useToast()
-  const queryClient = useQueryClient()
   const [isRefreshing, setIsRefreshing] = useState(false)
 
   // 获取系统信息
@@ -215,25 +211,6 @@ export default function SystemInfoPage() {
     queryKey: ["system-info"],
     queryFn: systemApi.getSystemInfo,
     refetchInterval: 10000, // 每 10 秒刷新
-  })
-
-  // 内存清理
-  const cleanupMutation = useMutation({
-    mutationFn: (aggressive: boolean) => systemApi.cleanupMemory(aggressive),
-    onSuccess: (data) => {
-      toast({
-        title: "内存清理完成",
-        description: `释放 CPU: ${data.freed.cpu_gb.toFixed(2)}GB, GPU: ${data.freed.gpu_gb.toFixed(2)}GB`,
-      })
-      queryClient.invalidateQueries({ queryKey: ["system-info"] })
-    },
-    onError: () => {
-      toast({
-        title: "清理失败",
-        description: "内存清理操作失败",
-        variant: "destructive",
-      })
-    },
   })
 
   const handleRefresh = async () => {
@@ -277,24 +254,6 @@ export default function SystemInfoPage() {
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
             刷新
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => cleanupMutation.mutate(false)}
-            disabled={cleanupMutation.isPending}
-          >
-            <Trash2 className="h-4 w-4 mr-2" />
-            清理内存
-          </Button>
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() => cleanupMutation.mutate(true)}
-            disabled={cleanupMutation.isPending}
-          >
-            <Trash2 className="h-4 w-4 mr-2" />
-            深度清理
           </Button>
         </div>
       </div>

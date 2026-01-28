@@ -162,8 +162,10 @@ class TaskQueueSettings(BaseSettings):
     result_retention_hours: int = Field(default=24, alias="TASK_RESULT_RETENTION_HOURS")
     # 同步模式超时时间（秒）
     sync_timeout_seconds: int = Field(default=600, alias="SYNC_TIMEOUT_SECONDS")
+    # 执行模式：thread (默认) 或 process
+    execution_mode: str = Field(default="thread", alias="TASK_QUEUE_EXECUTION_MODE")
     
-    model_config = {"env_prefix": "", "extra": "ignore"}
+    model_config = {"env_prefix": "", "extra": "ignore", "populate_by_name": True}
 
 
 class AuthSettings(BaseSettings):

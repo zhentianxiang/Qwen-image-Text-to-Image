@@ -103,7 +103,13 @@ cleanup:
 task_queue:
   # 最大并行工作者数量（默认自动检测GPU数量）
   # 设为0表示自动检测
-  max_workers: 0
+  # 设为1表示强制串行（推荐用于多卡运行大模型，如生成4K图）
+  max_workers: 1
+  
+  # 执行模式
+  # 'thread': 使用线程池，模型常驻内存（响应快，但显存可能无法释放）
+  # 'process': 为每个任务启动新进程（彻底释放内存，但每次需重新加载模型，延迟高）
+  execution_mode: "process"
   
   # 任务结果保留时间（小时）
   result_retention_hours: 24

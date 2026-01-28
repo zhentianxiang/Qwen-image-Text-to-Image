@@ -11,7 +11,6 @@ from ..schemas import HealthResponse, ModelInfo, ModelsResponse
 from ..services.auth import get_current_active_admin_user
 from ..utils.memory_utils import (
     get_memory_info,
-    cleanup_memory,
     get_gpu_details,
     get_system_info,
 )
@@ -80,33 +79,6 @@ async def get_memory_status():
     返回 CPU 和 GPU 内存的当前使用情况
     """
     return get_memory_info()
-
-
-@router.post("/memory/cleanup")
-async def trigger_memory_cleanup(
-    aggressive: bool = False,
-    _: User = Depends(get_current_active_admin_user),
-):
-    """
-    手动触发内存清理（仅管理员）
-    
-    Args:
-        aggressive: 是否使用激进清理模式（更彻底但耗时更长）
-    
-    Returns:
-        清理前后的内存信息
-    """
-    result = cleanup_memory(aggressive=aggressive)
-    return {
-        "message": "内存清理完成",
-        "aggressive_mode": aggressive,
-        "before": result["before"],
-        "after": result["after"],
-        "freed": {
-            "cpu_gb": result["freed_cpu_gb"],
-            "gpu_gb": result["freed_gpu_gb"],
-        }
-    }
 
 
 @router.get("/gpu")

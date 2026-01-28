@@ -332,8 +332,11 @@ async def edit_image(
     """
     model_manager = get_model_manager()
     
-    if not model_manager.is_image_edit_loaded:
+    # 在 process 模式下，主进程不加载模型，跳过检查
+    if settings.task_queue.execution_mode != "process" and not model_manager.is_image_edit_loaded:
         raise HTTPException(status_code=503, detail="图像编辑模型未加载")
+    
+    # 检查配额（按生成图片数量消耗配额）
     
     # 检查配额（按生成图片数量消耗配额）
     if settings.quota.enabled:
@@ -473,8 +476,11 @@ async def batch_edit(
     """
     model_manager = get_model_manager()
     
-    if not model_manager.is_image_edit_loaded:
+    # 在 process 模式下，主进程不加载模型，跳过检查
+    if settings.task_queue.execution_mode != "process" and not model_manager.is_image_edit_loaded:
         raise HTTPException(status_code=503, detail="图像编辑模型未加载")
+    
+    # 检查配额（按生成图片数量消耗配额）
     
     # 解析提示列表
     prompt_list = [p.strip() for p in prompts.split("|") if p.strip()]

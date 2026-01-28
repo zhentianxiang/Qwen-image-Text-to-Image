@@ -124,6 +124,14 @@ class ModelManager:
             )
             
             if self.device == "cuda":
+                # 启用 VAE Tiling 和 Slicing 以节省显存（对生成高分辨率图像至关重要）
+                try:
+                    self._text_to_image_pipeline.enable_vae_tiling()
+                    self._text_to_image_pipeline.enable_vae_slicing()
+                    logger.info("已启用 VAE Tiling 和 Slicing")
+                except Exception as e:
+                    logger.warning(f"启用 VAE 优化失败: {e}")
+
                 if self.gpu_count > 1:
                     logger.info(f"文生图模型已加载 (Device Map: Balanced, GPUs: {self.gpu_count})")
                 else:
@@ -159,6 +167,14 @@ class ModelManager:
             )
             
             if self.device == "cuda":
+                # 启用 VAE Tiling 和 Slicing 以节省显存
+                try:
+                    self._image_edit_pipeline.enable_vae_tiling()
+                    self._image_edit_pipeline.enable_vae_slicing()
+                    logger.info("已启用 VAE Tiling 和 Slicing")
+                except Exception as e:
+                    logger.warning(f"启用 VAE 优化失败: {e}")
+
                 if self.gpu_count > 1:
                     logger.info(f"图像编辑模型已加载 (Device Map: Balanced, GPUs: {self.gpu_count})")
                 else:

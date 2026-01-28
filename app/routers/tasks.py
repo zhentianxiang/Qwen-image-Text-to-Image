@@ -38,9 +38,10 @@ async def get_queue_info(
     获取任务队列信息
     
     返回队列状态、GPU数量、并行度、各状态任务数量等
+    统计数据仅针对当前用户
     """
     task_queue = get_task_queue()
-    return task_queue.get_queue_info()
+    return task_queue.get_queue_info(user_id=current_user.id)
 
 
 @router.get("/history/me", response_model=TaskHistoryListResponse)

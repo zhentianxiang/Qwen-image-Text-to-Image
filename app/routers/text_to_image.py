@@ -180,7 +180,8 @@ async def generate_image(
     """
     model_manager = get_model_manager()
     
-    if not model_manager.is_text_to_image_loaded:
+    # 在 process 模式下，主进程不加载模型，跳过检查
+    if settings.task_queue.execution_mode != "process" and not model_manager.is_text_to_image_loaded:
         raise HTTPException(status_code=503, detail="文生图模型未加载")
     
     # 检查配额（按生成图片数量消耗配额）

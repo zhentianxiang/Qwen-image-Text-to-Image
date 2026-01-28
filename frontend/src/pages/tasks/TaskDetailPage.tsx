@@ -1,13 +1,14 @@
-import { useParams, Link } from "react-router-dom"
-import { useQuery } from "@tanstack/react-query"
-import { ArrowLeft, Download, Clock, Calendar, Loader2, FileArchive, Image as ImageIcon } from "lucide-react"
-import { tasksApi } from "@/api"
+import { useParams, Link, useNavigate } from "react-router-dom"
+import { useQuery, useMutation } from "@tanstack/react-query"
+import { ArrowLeft, Download, Clock, Calendar, Loader2, FileArchive, Image as ImageIcon, RotateCw } from "lucide-react"
+import { tasksApi, generationApi } from "@/api"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { TaskStatusBadge } from "@/components/tasks/TaskStatusBadge"
 import { formatDate, formatDuration } from "@/utils/format"
-import type { TaskType } from "@/types"
+import { useToast } from "@/hooks/useToast"
+import type { TaskType, TaskSubmitResponse } from "@/types"
 
 const taskTypeLabels: Record<TaskType, string> = {
   text_to_image: "文生图",
@@ -23,6 +24,8 @@ interface ResultData {
 
 export function TaskDetailPage() {
   const { taskId } = useParams<{ taskId: string }>()
+  const navigate = useNavigate()
+  const { toast } = useToast()
 
   const { data: task, isLoading } = useQuery({
     queryKey: ['task-detail', taskId],
@@ -48,6 +51,38 @@ export function TaskDetailPage() {
     retry: 1, // 只重试一次
     staleTime: 1000 * 60 * 5, // 5分钟内不重新获取
     refetchOnWindowFocus: false, // 窗口聚焦时不刷新
+  })
+
+  const retryMutation = useMutation({
+    mutationFn: async () => {
+      if (!task || task.task_type !== 'text_to_image') {
+        throw new Error("仅支持文生图任务重试")
+      }
+      // 从 task 信息中重构参数
+      const params = {
+        prompt: task.prompt,
+        negative_prompt: task.negative_prompt,
+        ...task.parameters,
+        async_mode: true
+      }
+      // 注意：这里我们假设 task.parameters 包含了 API 所需的所有参数
+      // 实际上 parameters 可能存储的是 key-value，需要确保键名匹配
+      return await generationApi.textToImage(params as any) as TaskSubmitResponse
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "任务已重新提交",
+        description: "正在跳转到新任务详情页...",
+      })
+      navigate(`/tasks/${data.task_id}`)
+    },
+    onError: (error) => {
+      toast({
+        title: "重试失败",
+        description: error instanceof Error ? error.message : "未知错误",
+        variant: "destructive"
+      })
+    }
   })
 
   const downloadResult = () => {
@@ -81,16 +116,33 @@ export function TaskDetailPage() {
   return (
     <div className="space-y-6 animate-in">
       {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" asChild>
-          <Link to="/history">
-            <ArrowLeft className="h-5 w-5" />
-          </Link>
-        </Button>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">任务详情</h1>
-          <p className="text-sm text-muted-foreground">ID: {task.task_id}</p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" asChild>
+            <Link to="/history">
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">任务详情</h1>
+            <p className="text-sm text-muted-foreground">ID: {task.task_id}</p>
+          </div>
         </div>
+        
+        {/* 重试按钮 - 仅限失败的文生图任务 */}
+        {task.status === 'failed' && task.task_type === 'text_to_image' && (
+          <Button 
+            onClick={() => retryMutation.mutate()} 
+            disabled={retryMutation.isPending}
+          >
+            {retryMutation.isPending ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <RotateCw className="h-4 w-4 mr-2" />
+            )}
+            重试任务
+          </Button>
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">

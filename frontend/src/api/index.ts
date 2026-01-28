@@ -31,12 +31,4 @@ export const systemApi = {
     const response = await apiClient.get('/system')
     return response.data
   },
-
-  // 清理内存（仅管理员）
-  cleanupMemory: async (aggressive: boolean = false) => {
-    const response = await apiClient.post('/memory/cleanup', null, {
-      params: { aggressive }
-    })
-    return response.data
-  },
 }
