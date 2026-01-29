@@ -35,8 +35,12 @@ services:
       - ./logs:/app/logs
       # 数据目录（SQLite数据库持久化）
       - ./data:/app/data
-    
+
+      # 时区
+      - /etc/localtime:/etc/localtime   
     environment:
+      # 时区
+      - TZ=Asia/Shanghai
       # 服务配置
       - APP_HOST=0.0.0.0
       - APP_PORT=8000
@@ -72,6 +76,8 @@ services:
     restart: unless-stopped
     ports:
       - "8000:80"
+    environment:
+      - TZ=Asia/Shanghai
     depends_on:
       - qwen-image
     healthcheck:

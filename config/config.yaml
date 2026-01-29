@@ -4,8 +4,8 @@
 # 此文件中的配置可以被环境变量覆盖
 
 app:
-  name: "Qwen 多模态图像API服务"
-  description: "集成文生图(Qwen-Image-2512)和图像编辑(Qwen-Image-Edit-2511)功能"
+  name: "造梦AI"
+  description: "基于 Qwen-Image 的高性能 AI 图像生成与编辑平台"
   version: "1.0.0"
   host: "0.0.0.0"
   port: 8000

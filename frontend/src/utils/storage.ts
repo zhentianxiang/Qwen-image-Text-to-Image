@@ -1,5 +1,5 @@
-const TOKEN_KEY = 'qwen_image_token'
-const USER_KEY = 'qwen_image_user'
+const TOKEN_KEY = 'dream_ai_token'
+const USER_KEY = 'dream_ai_user'
 
 export const storage = {
   getToken: (): string | null => {

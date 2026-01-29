@@ -62,10 +62,10 @@ export function AuthLayout() {
       <div className="relative z-10 w-full max-w-md px-4">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/20 backdrop-blur-md border border-white/10 mb-4 shadow-lg">
-            <span className="text-3xl font-bold text-white">Q</span>
+            <span className="text-3xl font-bold text-white">造</span>
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2 drop-shadow-md">Qwen Image</h1>
-          <p className="text-slate-200 drop-shadow-sm">AI 图像创作平台</p>
+          <h1 className="text-3xl font-bold text-white mb-2 drop-shadow-md">造梦AI</h1>
+          <p className="text-slate-200 drop-shadow-sm">开启您的 AI 艺术之旅</p>
         </div>
         <Outlet />
       </div>

@@ -31,12 +31,12 @@ export function Header() {
     <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex h-14 items-center px-4 gap-4">
         {/* Logo */}
-        <Link to="/" className="flex items-center gap-2 font-bold text-xl">
-          <div className="h-8 w-8 rounded-lg gradient-bg flex items-center justify-center text-white text-sm">
-            Q
+        <Link to="/" className="flex items-center gap-2 mr-6">
+          <div className="w-8 h-8 rounded-lg gradient-bg flex items-center justify-center text-white font-bold">
+            造
           </div>
-          <span className="hidden md:inline bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent">
-            Qwen Image
+          <span className="font-bold text-xl tracking-tight hidden sm:inline-block">
+            造梦AI
           </span>
         </Link>
 

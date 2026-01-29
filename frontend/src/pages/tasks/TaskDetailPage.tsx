@@ -42,7 +42,7 @@ export function TaskDetailPage() {
                       result.type === 'application/x-zip-compressed' ||
                       result.type === 'application/octet-stream'
         const url = URL.createObjectURL(result)
-        const filename = isZip ? `qwen-images-${taskId?.slice(0, 8)}.zip` : `qwen-image-${taskId?.slice(0, 8)}.png`
+        const filename = isZip ? `dream-ai-images-${taskId?.slice(0, 8)}.zip` : `dream-ai-image-${taskId?.slice(0, 8)}.png`
         return { url, isZip, filename }
       }
       return null

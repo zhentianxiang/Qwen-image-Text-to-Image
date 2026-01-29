@@ -37,7 +37,7 @@ init_logging(
     file_enabled=settings.logging.file_enabled,
     file_path=settings.logging.file_path,
 )
-logger = get_logger("qwen_image")
+logger = get_logger("dream_ai")
 
 async def custom_rate_limit_handler(request: Request, exc: RateLimitExceeded):
     """自定义频率限制异常处理"""

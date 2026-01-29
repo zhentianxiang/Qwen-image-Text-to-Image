@@ -49,8 +49,8 @@ export function GenerationResult({
     const link = document.createElement("a")
     link.href = imageUrl
     link.download = isZipFile 
-      ? `qwen-images-${taskId?.slice(0, 8)}.zip`
-      : `qwen-image-${taskId?.slice(0, 8)}.png`
+      ? `dream-ai-images-${taskId?.slice(0, 8)}.zip`
+      : `dream-ai-image-${taskId?.slice(0, 8)}.png`
     link.click()
   }
 
