@@ -10,7 +10,7 @@ app:
   host: "0.0.0.0"
   port: 8000
   # 前端访问的基础URL (用于邮件链接，请修改为您的实际访问地址)
-  base_url: "http://127.0.0.1:8200"
+  base_url: "https://dream-ai.tianxiang.love"
   debug: false
 
 models:
@@ -103,9 +103,9 @@ email:
   enabled: true
   smtp_server: "smtp.qq.com"
   smtp_port: 587
-  smtp_username: "your_qq_email@qq.com"  # 请修改为你的QQ邮箱
-  smtp_password: "your_auth_code"        # 请修改为QQ邮箱授权码
-  from_email: "your_qq_email@qq.com"     # 发件人邮箱
+  smtp_username: "2099637909@qq.com"  # 请修改为你的QQ邮箱
+  smtp_password: "xxxxxxxxxxxxx"        # 请修改为QQ邮箱授权码
+  from_email: "2099637909@qq.com"     # 发件人邮箱
   from_name: "Qwen Image Service"        # 发件人名称
   tls: true
   ssl: false
