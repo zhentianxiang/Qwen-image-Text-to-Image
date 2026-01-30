@@ -67,6 +67,16 @@ async def run_worker(task_type: str, args_file: str, output_file: str):
             from app.routers.image_edit import _run_batch_edit_inference
             result = _run_batch_edit_inference(**kwargs)
             
+        elif task_type == "text_to_video":
+            await model_manager._load_text_to_video_model()
+            from app.routers.text_to_video import _run_text_to_video_inference
+            result = _run_text_to_video_inference(**kwargs)
+
+        elif task_type == "image_to_video":
+            await model_manager._load_image_to_video_model()
+            from app.routers.image_to_video import _run_image_to_video_inference
+            result = _run_image_to_video_inference(**kwargs)
+            
         else:
             raise ValueError(f"Unknown task type: {task_type}")
 

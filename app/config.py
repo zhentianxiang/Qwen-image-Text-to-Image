@@ -60,6 +60,14 @@ class ModelSettings(BaseSettings):
         default="Qwen/Qwen-Image-Edit-2511",
         alias="IMAGE_EDIT_MODEL"
     )
+    text_to_video_model: str = Field(
+        default="THUDM/CogVideoX-5b",
+        alias="TEXT_TO_VIDEO_MODEL"
+    )
+    image_to_video_model: str = Field(
+        default="THUDM/CogVideoX-5b-I2V",
+        alias="IMAGE_TO_VIDEO_MODEL"
+    )
     models_dir: str = Field(default="./models", alias="MODELS_DIR")
     device: str = Field(default="cuda", alias="DEVICE")
     

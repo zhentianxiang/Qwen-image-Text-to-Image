@@ -17,8 +17,8 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              #device_ids: ["2"]
-              device_ids: ["0", "1", "2"]
+              device_ids: ["2"]
+              #device_ids: ["0", "1", "2"]
               capabilities: [gpu]
     
     ports:
@@ -45,6 +45,23 @@ services:
       - APP_HOST=0.0.0.0
       - APP_PORT=8000
       - APP_DEBUG=false
+
+      # 模型配置
+      # 使用HuggingFace在线模型：
+      #- TEXT_TO_IMAGE_MODEL=Qwen/Qwen-Image-2512
+      #- IMAGE_EDIT_MODEL=Qwen/Qwen-Image-Edit-2511
+      # 或使用本地模型路径（取消注释）：
+      - TEXT_TO_IMAGE_MODEL=/app/models/Qwen-Image-2512
+      - IMAGE_EDIT_MODEL=/app/models/Qwen-Image-Edit-2511
+      - TEXT_TO_VIDEO_MODEL=/app/models/CogVideoX-5b
+      - IMAGE_TO_VIDEO_MODEL=/app/models/CogVideoX-5b-I2V
+      - MODELS_DIR=/app/models
+      - DEVICE=cuda
+      
+      # HuggingFace配置（可选，如果需要私有模型）
+      # - HF_TOKEN=your_token_here
+      # 使用HuggingFace镜像（国内加速）
+      - HF_ENDPOINT=https://hf-mirror.com
 
       # 禁用Intel XPU检测（解决torch.xpu错误）
       - ACCELERATE_TORCH_DEVICE=cuda

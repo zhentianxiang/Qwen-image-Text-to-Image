@@ -22,8 +22,11 @@ import { DashboardPage } from "@/pages/dashboard/DashboardPage"
 import { TextToImagePage } from "@/pages/generate/TextToImagePage"
 import { ImageEditPage } from "@/pages/generate/ImageEditPage"
 import { BatchEditPage } from "@/pages/generate/BatchEditPage"
+import { TextToVideoPage } from "@/pages/generate/TextToVideoPage"
+import { ImageToVideoPage } from "@/pages/generate/ImageToVideoPage"
 import { TaskListPage } from "@/pages/tasks/TaskListPage"
 import { TaskDetailPage } from "@/pages/tasks/TaskDetailPage"
+import { RecycleBinPage } from "@/pages/tasks/RecycleBinPage"
 import { HistoryPage } from "@/pages/history/HistoryPage"
 import { ProfilePage } from "@/pages/profile/ProfilePage"
 import { QuotaPage } from "@/pages/profile/QuotaPage"
@@ -90,9 +93,12 @@ function AppContent() {
         <Route path="/generate/text-to-image" element={<TextToImagePage />} />
         <Route path="/generate/image-edit" element={<ImageEditPage />} />
         <Route path="/generate/batch-edit" element={<BatchEditPage />} />
+        <Route path="/generate/text-to-video" element={<TextToVideoPage />} />
+        <Route path="/generate/image-to-video" element={<ImageToVideoPage />} />
 
         {/* Tasks */}
         <Route path="/tasks" element={<TaskListPage />} />
+        <Route path="/tasks/recycle-bin" element={<RecycleBinPage />} />
         <Route path="/tasks/:taskId" element={<TaskDetailPage />} />
 
         {/* History */}

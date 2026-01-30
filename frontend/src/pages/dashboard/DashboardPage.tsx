@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query"
-import { Link } from "react-router-dom"
 import { 
   ImagePlus, 
   Pencil, 
@@ -8,18 +7,18 @@ import {
   XCircle, 
   Clock, 
   TrendingUp,
-  ArrowRight
+  Video,
+  Film
 } from "lucide-react"
 import { tasksApi, getHealth } from "@/api"
 import { useAuth } from "@/hooks/useAuth"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { formatDuration } from "@/utils/format"
 
 export function DashboardPage() {
-  const { user, isAdmin } = useAuth()
+  const { user } = useAuth()
 
   const { data: stats } = useQuery({
     queryKey: ['my-statistics'],
@@ -43,12 +42,6 @@ export function DashboardPage() {
     refetchInterval: 30000,
   })
 
-  const quickActions = [
-    { title: "文生图", href: "/generate/text-to-image", icon: ImagePlus, color: "bg-blue-500" },
-    { title: "图像编辑", href: "/generate/image-edit", icon: Pencil, color: "bg-green-500" },
-    { title: "批量编辑", href: "/generate/batch-edit", icon: Layers, color: "bg-purple-500" },
-  ]
-
   return (
     <div className="space-y-6 animate-in">
       {/* Welcome Section */}
@@ -59,26 +52,6 @@ export function DashboardPage() {
         <p className="text-muted-foreground">
           开始创作您的 AI 艺术作品
         </p>
-      </div>
-
-      {/* Quick Actions */}
-      <div className="grid gap-4 md:grid-cols-3">
-        {quickActions.map((action) => (
-          <Link key={action.href} to={action.href}>
-            <Card className="hover:shadow-md transition-shadow cursor-pointer group">
-              <CardContent className="flex items-center gap-4 p-6">
-                <div className={`p-3 rounded-xl ${action.color} text-white`}>
-                  <action.icon className="h-6 w-6" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold">{action.title}</h3>
-                  <p className="text-sm text-muted-foreground">开始创作</p>
-                </div>
-                <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:translate-x-1 transition-transform" />
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
       </div>
 
       {/* Stats Grid */}
@@ -221,7 +194,7 @@ export function DashboardPage() {
             <CardDescription>您使用各功能的次数</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-3 gap-4 text-center">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 text-center">
               <div className="p-4 rounded-lg bg-blue-500/10">
                 <ImagePlus className="h-8 w-8 mx-auto mb-2 text-blue-500" />
                 <div className="text-2xl font-bold">{stats.text_to_image_count}</div>
@@ -237,27 +210,17 @@ export function DashboardPage() {
                 <div className="text-2xl font-bold">{stats.batch_edit_count}</div>
                 <div className="text-sm text-muted-foreground">批量编辑</div>
               </div>
+              <div className="p-4 rounded-lg bg-orange-500/10">
+                <Video className="h-8 w-8 mx-auto mb-2 text-orange-500" />
+                <div className="text-2xl font-bold">{stats.text_to_video_count}</div>
+                <div className="text-sm text-muted-foreground">文生视频</div>
+              </div>
+              <div className="p-4 rounded-lg bg-pink-500/10">
+                <Film className="h-8 w-8 mx-auto mb-2 text-pink-500" />
+                <div className="text-2xl font-bold">{stats.image_to_video_count}</div>
+                <div className="text-sm text-muted-foreground">图生视频</div>
+              </div>
             </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Admin Quick Access */}
-      {isAdmin && (
-        <Card className="border-primary/50">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Badge variant="default">管理员</Badge>
-              快速访问
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex gap-4">
-            <Button asChild variant="outline">
-              <Link to="/admin/users">用户管理</Link>
-            </Button>
-            <Button asChild variant="outline">
-              <Link to="/admin/statistics">全局统计</Link>
-            </Button>
           </CardContent>
         </Card>
       )}

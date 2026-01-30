@@ -1,6 +1,6 @@
 export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
 
-export type TaskType = 'text_to_image' | 'image_edit' | 'batch_edit'
+export type TaskType = 'text_to_image' | 'image_edit' | 'batch_edit' | 'text_to_video' | 'image_to_video'
 
 export interface Task {
   task_id: string
@@ -62,6 +62,8 @@ export interface TaskStatistics {
   text_to_image_count: number
   image_edit_count: number
   batch_edit_count: number
+  text_to_video_count: number
+  image_to_video_count: number
   avg_execution_time: number | null
   total_execution_time: number | null
   today_tasks?: number

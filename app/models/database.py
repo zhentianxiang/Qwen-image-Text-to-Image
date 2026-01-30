@@ -77,6 +77,10 @@ class TaskHistory(Base):
     # 执行时间（秒）
     execution_time = Column(Float, nullable=True)
     
+    # 删除状态
+    is_deleted = Column(Boolean, default=False, index=True)
+    deleted_at = Column(DateTime, nullable=True)
+    
     # 关联用户
     user = relationship("User", back_populates="tasks")
     
@@ -114,6 +118,8 @@ class TaskHistory(Base):
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
             "execution_time": self.execution_time,
+            "is_deleted": self.is_deleted,
+            "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
         }
 
 

@@ -14,11 +14,14 @@ const taskTypeLabels: Record<TaskType, string> = {
   text_to_image: "文生图",
   image_edit: "图像编辑",
   batch_edit: "批量编辑",
+  text_to_video: "文生视频",
+  image_to_video: "图生视频",
 }
 
 interface ResultData {
   url: string
   isZip: boolean
+  isVideo: boolean
   filename: string
 }
 
@@ -41,9 +44,18 @@ export function TaskDetailPage() {
         const isZip = result.type === 'application/zip' || 
                       result.type === 'application/x-zip-compressed' ||
                       result.type === 'application/octet-stream'
+        const isVideo = result.type.startsWith('video/')
         const url = URL.createObjectURL(result)
-        const filename = isZip ? `dream-ai-images-${taskId?.slice(0, 8)}.zip` : `dream-ai-image-${taskId?.slice(0, 8)}.png`
-        return { url, isZip, filename }
+        
+        let extension = 'png'
+        if (isZip) extension = 'zip'
+        if (isVideo) extension = 'mp4'
+        
+        const filename = isZip 
+          ? `dream-ai-images-${taskId?.slice(0, 8)}.${extension}` 
+          : `dream-ai-result-${taskId?.slice(0, 8)}.${extension}`
+          
+        return { url, isZip, isVideo, filename }
       }
       return null
     },
@@ -277,6 +289,23 @@ export function TaskDetailPage() {
                           下载 ZIP 文件
                         </Button>
                       </div>
+                    ) : resultData.isVideo ? (
+                      // 视频结果
+                      <>
+                        <div className="rounded-lg overflow-hidden bg-black aspect-video">
+                          <video
+                            src={resultData.url}
+                            controls
+                            autoPlay
+                            loop
+                            className="w-full h-full object-contain"
+                          />
+                        </div>
+                        <Button onClick={downloadResult} className="w-full">
+                          <Download className="h-4 w-4 mr-2" />
+                          下载视频
+                        </Button>
+                      </>
                     ) : (
                       // 单张图片
                       <>

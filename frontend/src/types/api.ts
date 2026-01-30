@@ -46,3 +46,23 @@ export interface BatchEditParams {
   seed?: number
   async_mode?: boolean
 }
+
+export interface TextToVideoParams {
+  prompt: string
+  negative_prompt?: string
+  num_frames?: number
+  num_inference_steps?: number
+  guidance_scale?: number
+  seed?: number
+}
+
+export interface ImageToVideoParams {
+  prompt: string
+  image?: File
+  source_task_id?: string
+  negative_prompt?: string
+  num_frames?: number
+  num_inference_steps?: number
+  guidance_scale?: number
+  seed?: number
+}

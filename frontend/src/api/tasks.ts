@@ -50,6 +50,33 @@ export const tasksApi = {
     return response.data
   },
 
+  // 获取回收站
+  getRecycleBin: async (params: {
+    page?: number
+    page_size?: number
+  }): Promise<TaskHistoryListResponse> => {
+    const response = await apiClient.get<TaskHistoryListResponse>('/tasks/recycle-bin/me', { params })
+    return response.data
+  },
+
+  // 软删除任务
+  deleteTask: async (taskId: string): Promise<{ message: string; task_id: string }> => {
+    const response = await apiClient.post(`/tasks/${taskId}/delete`)
+    return response.data
+  },
+
+  // 恢复任务
+  restoreTask: async (taskId: string): Promise<{ message: string; task_id: string }> => {
+    const response = await apiClient.post(`/tasks/${taskId}/restore`)
+    return response.data
+  },
+
+  // 永久删除任务
+  permanentDeleteTask: async (taskId: string): Promise<{ message: string; task_id: string }> => {
+    const response = await apiClient.delete(`/tasks/${taskId}/permanent`)
+    return response.data
+  },
+
   // 获取所有任务历史（管理员）
   getAllHistory: async (params: {
     page?: number

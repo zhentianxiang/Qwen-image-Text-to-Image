@@ -39,6 +39,29 @@ class BatchEditRequest(BaseModel):
     seed: int = Field(default=-1, description="随机种子，-1表示随机生成")
 
 
+class TextToVideoRequest(BaseModel):
+    """文生视频请求参数"""
+    
+    prompt: str = Field(..., description="生成视频的描述文本")
+    negative_prompt: str = Field(default="", description="不希望出现的内容")
+    num_frames: int = Field(default=49, ge=16, le=81, description="生成帧数")
+    num_inference_steps: int = Field(default=50, ge=20, le=100, description="推理步数")
+    guidance_scale: float = Field(default=6.0, ge=1.0, le=20.0, description="指导尺度")
+    seed: int = Field(default=-1, description="随机种子")
+
+
+class ImageToVideoRequest(BaseModel):
+    """图生视频请求参数"""
+    
+    prompt: str = Field(..., description="视频内容的描述")
+    # image 字段通过 multipart/form-data 或 现有文件路径 传递，不在 JSON body 中定义
+    negative_prompt: str = Field(default="", description="不希望出现的内容")
+    num_frames: int = Field(default=49, ge=16, le=81, description="生成帧数")
+    num_inference_steps: int = Field(default=50, ge=20, le=100, description="推理步数")
+    guidance_scale: float = Field(default=6.0, ge=1.0, le=20.0, description="指导尺度")
+    seed: int = Field(default=-1, description="随机种子")
+
+
 class HealthResponse(BaseModel):
     """健康检查响应"""
     

@@ -49,6 +49,8 @@ class TaskStatistics(BaseModel):
     text_to_image_count: int = Field(0, description="文生图任务数")
     image_edit_count: int = Field(0, description="图像编辑任务数")
     batch_edit_count: int = Field(0, description="批量编辑任务数")
+    text_to_video_count: int = Field(0, description="文生视频任务数")
+    image_to_video_count: int = Field(0, description="图生视频任务数")
     
     # 时间统计
     avg_execution_time: Optional[float] = Field(None, description="平均执行时间（秒）")

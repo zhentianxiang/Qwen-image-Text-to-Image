@@ -11,7 +11,10 @@ import {
   BarChart3,
   Server,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Trash2,
+  Video,
+  Film
 } from "lucide-react"
 import { cn } from "@/utils/cn"
 import { useAuth } from "@/hooks/useAuth"
@@ -32,11 +35,14 @@ const mainNavItems: NavItem[] = [
   { title: "文生图", href: "/generate/text-to-image", icon: ImagePlus },
   { title: "图像编辑", href: "/generate/image-edit", icon: Pencil },
   { title: "批量编辑", href: "/generate/batch-edit", icon: Layers },
+  { title: "文生视频", href: "/generate/text-to-video", icon: Video },
+  { title: "图生视频", href: "/generate/image-to-video", icon: Film },
 ]
 
 const taskNavItems: NavItem[] = [
   { title: "任务列表", href: "/tasks", icon: ListTodo },
   { title: "历史记录", href: "/history", icon: History },
+  { title: "回收站", href: "/tasks/recycle-bin", icon: Trash2 },
 ]
 
 const userNavItems: NavItem[] = [

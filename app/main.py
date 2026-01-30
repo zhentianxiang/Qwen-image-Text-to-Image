@@ -21,6 +21,8 @@ from .models.database import init_database, close_database
 from .routers import (
     text_to_image_router, 
     image_edit_router, 
+    text_to_video_router,
+    image_to_video_router,
     info_router, 
     tasks_router,
     auth_router,
@@ -181,6 +183,8 @@ app.add_middleware(
 app.include_router(auth_router)  # 认证路由
 app.include_router(text_to_image_router)
 app.include_router(image_edit_router)
+app.include_router(text_to_video_router)
+app.include_router(image_to_video_router)
 app.include_router(info_router)
 app.include_router(tasks_router)
 

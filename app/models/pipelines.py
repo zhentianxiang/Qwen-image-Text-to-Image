@@ -17,7 +17,8 @@ class ModelManager:
     """
     模型管理器
     
-    单例模式，负责管理文生图和图像编辑模型的加载和推理
+    单例模式，负责管理文生图、图像编辑、文生视频、图生视频模型的加载和推理。
+    核心逻辑：互斥加载 (Lazy Loading + Hot Swapping)
     """
     
     _instance: Optional["ModelManager"] = None
@@ -34,23 +35,27 @@ class ModelManager:
         
         self._text_to_image_pipeline = None
         self._image_edit_pipeline = None
+        self._video_pipeline = None # 复用，CogVideoX 的 T2V 和 I2V 管道对象不同
+        self._current_video_model_type = None # "text_to_video" or "image_to_video"
+        
         self._device = None
         self._dtype = None
         self._initialized = True
     
     @property
     def text_to_image_pipeline(self) -> Optional[Any]:
-        """文生图模型pipeline"""
         return self._text_to_image_pipeline
     
     @property
     def image_edit_pipeline(self) -> Optional[Any]:
-        """图像编辑模型pipeline"""
         return self._image_edit_pipeline
+
+    @property
+    def video_pipeline(self) -> Optional[Any]:
+        return self._video_pipeline
     
     @property
     def device(self) -> str:
-        """当前使用的设备"""
         if self._device is None:
             if settings.models.device == "cuda" and torch.cuda.is_available():
                 self._device = "cuda"
@@ -60,9 +65,9 @@ class ModelManager:
     
     @property
     def dtype(self) -> torch.dtype:
-        """当前使用的数据类型"""
         if self._dtype is None:
             if self.device == "cuda":
+                # A40/3090/4090 推荐 bfloat16
                 self._dtype = torch.bfloat16
             else:
                 self._dtype = torch.float32
@@ -70,51 +75,79 @@ class ModelManager:
     
     @property
     def is_text_to_image_loaded(self) -> bool:
-        """文生图模型是否已加载"""
         return self._text_to_image_pipeline is not None
-    
+
     @property
     def is_image_edit_loaded(self) -> bool:
-        """图像编辑模型是否已加载"""
         return self._image_edit_pipeline is not None
+
+    @property
+    def is_video_model_loaded(self) -> bool:
+        return self._video_pipeline is not None
     
     @property
     def gpu_available(self) -> bool:
-        """GPU是否可用"""
         return torch.cuda.is_available()
     
     @property
     def gpu_count(self) -> int:
-        """可用GPU数量"""
         return torch.cuda.device_count() if self.gpu_available else 0
-    
-    async def load_models(self) -> None:
+
+    def _unload_all_except(self, keep_type: str = None) -> None:
         """
-        加载所有模型
-        
-        在应用启动时调用
+        卸载除指定类型以外的所有模型
         """
-        logger.info("开始加载模型...")
-        logger.info(f"使用设备: {self.device}, 数据类型: {self.dtype}")
-        
-        await self._load_text_to_image_model()
-        await self._load_image_edit_model()
-        
-        logger.info("✅ 所有模型加载完成！")
-    
+        import gc
+        unloaded = False
+
+        # 卸载文生图
+        if keep_type != "text_to_image" and self._text_to_image_pipeline is not None:
+            logger.info("正在卸载文生图模型以释放显存...")
+            del self._text_to_image_pipeline
+            self._text_to_image_pipeline = None
+            unloaded = True
+
+        # 卸载图像编辑
+        if keep_type != "image_edit" and self._image_edit_pipeline is not None:
+            logger.info("正在卸载图像编辑模型以释放显存...")
+            del self._image_edit_pipeline
+            self._image_edit_pipeline = None
+            unloaded = True
+
+        # 卸载视频模型
+        # 如果 keep_type 是 video 但子类型不同，也要卸载
+        is_video_request = keep_type in ["text_to_video", "image_to_video"]
+        if self._video_pipeline is not None:
+            should_unload_video = True
+            if is_video_request and self._current_video_model_type == keep_type:
+                should_unload_video = False
+            
+            if should_unload_video:
+                logger.info(f"正在卸载视频模型 ({self._current_video_model_type}) 以释放显存...")
+                del self._video_pipeline
+                self._video_pipeline = None
+                self._current_video_model_type = None
+                unloaded = True
+
+        if unloaded and self.gpu_available:
+            gc.collect()
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+
     async def _load_text_to_image_model(self) -> None:
         """加载文生图模型"""
+        if self._text_to_image_pipeline is not None:
+            return
+
+        self._unload_all_except("text_to_image")
+        
         try:
             logger.info(f"正在加载文生图模型: {settings.models.text_to_image_model}")
-            
             from diffusers import DiffusionPipeline
             
-            # 自动判断最佳加载策略
             device_map = None
             if self.device == "cuda" and self.gpu_count > 1:
-                # 多卡环境：使用 balanced 策略分片模型
                 device_map = "balanced"
-                logger.info(f"检测到 {self.gpu_count} 张显卡，将使用 balanced 策略分片加载")
             
             self._text_to_image_pipeline = DiffusionPipeline.from_pretrained(
                 settings.models.text_to_image_model,
@@ -124,24 +157,24 @@ class ModelManager:
             )
             
             if self.device == "cuda":
-                # 启用 VAE Tiling 和 Slicing 以节省显存（对生成高分辨率图像至关重要）
+                # 显存优化
                 try:
                     self._text_to_image_pipeline.enable_vae_tiling()
                     self._text_to_image_pipeline.enable_vae_slicing()
-                    logger.info("已启用 VAE Tiling 和 Slicing")
                 except Exception as e:
-                    logger.warning(f"启用 VAE 优化失败: {e}")
+                    logger.warning(f"VAE Optimization Warning: {e}")
 
-                if self.gpu_count > 1:
-                    logger.info(f"文生图模型已加载 (Device Map: Balanced, GPUs: {self.gpu_count})")
-                else:
-                    # 单卡环境：由于模型巨大(Qwen-Image)，即使 A40(48G) 也可能 OOM
-                    # 必须使用 CPU Offload 来节省显存
-                    self._text_to_image_pipeline.enable_model_cpu_offload()
-                    self._text_to_image_pipeline.enable_attention_slicing()
-                    logger.info("文生图模型已加载 (Single GPU with CPU Offload)")
-            else:
-                logger.info("文生图模型已加载 (CPU)")
+                if self.gpu_count == 1:
+                     # A40 48G 一般不需要 offload Qwen，但为了保险起见，如果不跑视频，可以常驻
+                     # 为了极致并发，这里暂时不开启 offload，除非显存真的很小
+                     # self._text_to_image_pipeline.enable_model_cpu_offload()
+                     pass
+                
+                # 移动到 GPU (如果是单卡且没开 offload)
+                if not device_map:
+                    self._text_to_image_pipeline.to(self.device)
+
+            logger.info("✅ 文生图模型加载完成")
             
         except Exception as e:
             logger.error(f"文生图模型加载失败: {e}")
@@ -149,12 +182,15 @@ class ModelManager:
     
     async def _load_image_edit_model(self) -> None:
         """加载图像编辑模型"""
+        if self._image_edit_pipeline is not None:
+            return
+
+        self._unload_all_except("image_edit")
+
         try:
             logger.info(f"正在加载图像编辑模型: {settings.models.image_edit_model}")
-            
             from diffusers import QwenImageEditPlusPipeline
             
-            # 自动判断最佳加载策略
             device_map = None
             if self.device == "cuda" and self.gpu_count > 1:
                 device_map = "balanced"
@@ -167,111 +203,94 @@ class ModelManager:
             )
             
             if self.device == "cuda":
-                # 启用 VAE Tiling 和 Slicing 以节省显存
                 try:
                     self._image_edit_pipeline.enable_vae_tiling()
                     self._image_edit_pipeline.enable_vae_slicing()
-                    logger.info("已启用 VAE Tiling 和 Slicing")
-                except Exception as e:
-                    logger.warning(f"启用 VAE 优化失败: {e}")
+                except Exception:
+                    pass
+                
+                if not device_map:
+                    self._image_edit_pipeline.to(self.device)
 
-                if self.gpu_count > 1:
-                    logger.info(f"图像编辑模型已加载 (Device Map: Balanced, GPUs: {self.gpu_count})")
-                else:
-                    # 单卡环境：使用 CPU Offload
-                    self._image_edit_pipeline.enable_model_cpu_offload()
-                    self._image_edit_pipeline.enable_attention_slicing()
-                    logger.info("图像编辑模型已加载 (Single GPU with CPU Offload)")
-            else:
-                logger.info("图像编辑模型已加载 (CPU)")
+            logger.info("✅ 图像编辑模型加载完成")
             
         except Exception as e:
             logger.error(f"图像编辑模型加载失败: {e}")
             raise
-    
+
+    async def _load_text_to_video_model(self) -> None:
+        """加载文生视频模型 (CogVideoX-5B)"""
+        if self._video_pipeline is not None and self._current_video_model_type == "text_to_video":
+            return
+
+        self._unload_all_except("text_to_video")
+
+        try:
+            logger.info(f"正在加载文生视频模型: {settings.models.text_to_video_model}")
+            from diffusers import CogVideoXPipeline
+            
+            self._video_pipeline = CogVideoXPipeline.from_pretrained(
+                settings.models.text_to_video_model,
+                torch_dtype=self.dtype
+            )
+
+            # A40 优化
+            if self.device == "cuda":
+                self._video_pipeline.enable_vae_slicing()
+                # self._video_pipeline.enable_model_cpu_offload() # A40 不需要 offload 5B 模型
+                self._video_pipeline.to(self.device)
+            
+            self._current_video_model_type = "text_to_video"
+            logger.info("✅ 文生视频模型加载完成")
+
+        except Exception as e:
+            logger.error(f"文生视频模型加载失败: {e}")
+            raise
+
+    async def _load_image_to_video_model(self) -> None:
+        """加载图生视频模型 (CogVideoX-5B-I2V)"""
+        if self._video_pipeline is not None and self._current_video_model_type == "image_to_video":
+            return
+
+        self._unload_all_except("image_to_video")
+
+        try:
+            logger.info(f"正在加载图生视频模型: {settings.models.image_to_video_model}")
+            from diffusers import CogVideoXImageToVideoPipeline
+            
+            self._video_pipeline = CogVideoXImageToVideoPipeline.from_pretrained(
+                settings.models.image_to_video_model,
+                torch_dtype=self.dtype
+            )
+
+            if self.device == "cuda":
+                self._video_pipeline.enable_vae_slicing()
+                # self._video_pipeline.enable_vae_tiling() # 某些版本I2V可能支持
+                self._video_pipeline.to(self.device)
+            
+            self._current_video_model_type = "image_to_video"
+            logger.info("✅ 图生视频模型加载完成")
+
+        except Exception as e:
+            logger.error(f"图生视频模型加载失败: {e}")
+            raise
+
     async def unload_models(self) -> None:
-        """
-        卸载所有模型
-        
-        释放GPU内存
-        """
-        logger.info("正在卸载模型...")
-        
-        if self._text_to_image_pipeline is not None:
-            del self._text_to_image_pipeline
-            self._text_to_image_pipeline = None
-        
-        if self._image_edit_pipeline is not None:
-            del self._image_edit_pipeline
-            self._image_edit_pipeline = None
-        
-        # 清理GPU缓存
-        if self.gpu_available:
-            torch.cuda.empty_cache()
-        
-        logger.info("模型已卸载")
-    
+        """卸载所有模型"""
+        self._unload_all_except(keep_type=None)
+        logger.info("所有模型已卸载")
+
     def get_generator(self, seed: int = -1) -> Optional[torch.Generator]:
-        """
-        获取随机数生成器
-        
-        Args:
-            seed: 随机种子，-1表示不使用固定种子
-        
-        Returns:
-            torch.Generator 或 None
-        """
         if seed == -1:
             return None
-        
         generator = torch.Generator(device=self.device)
         generator.manual_seed(seed)
         return generator
-    
-    def clear_pipeline_cache(self) -> None:
-        """
-        清理 Pipeline 内部缓存
-        
-        在推理后调用以释放可能被缓存的中间张量
-        """
-        import gc
-        
-        # 清理文生图 pipeline 的缓存
-        if self._text_to_image_pipeline is not None:
-            # 清理 scheduler 的缓存
-            if hasattr(self._text_to_image_pipeline, 'scheduler'):
-                scheduler = self._text_to_image_pipeline.scheduler
-                if hasattr(scheduler, 'sigmas'):
-                    scheduler.sigmas = None
-                if hasattr(scheduler, 'timesteps'):
-                    scheduler.timesteps = None
-        
-        # 清理图像编辑 pipeline 的缓存
-        if self._image_edit_pipeline is not None:
-            if hasattr(self._image_edit_pipeline, 'scheduler'):
-                scheduler = self._image_edit_pipeline.scheduler
-                if hasattr(scheduler, 'sigmas'):
-                    scheduler.sigmas = None
-                if hasattr(scheduler, 'timesteps'):
-                    scheduler.timesteps = None
-        
-        # 垃圾回收
-        gc.collect()
-        
-        # 清理 CUDA 缓存
-        if self.gpu_available:
-            torch.cuda.empty_cache()
-            torch.cuda.synchronize()
-        
-        logger.debug("Pipeline 缓存已清理")
-
 
 # 全局单例
 _model_manager: Optional[ModelManager] = None
 
-
 def get_model_manager() -> ModelManager:
-    """获取模型管理器单例"""
     global _model_manager
     if _model_manager is None:
         _model_manager = ModelManager()

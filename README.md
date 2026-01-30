@@ -31,6 +31,8 @@
 |------|------|----------|
 | **Qwen-Image-2512** | 文生图 | [hf-mirror.com/Qwen/Qwen-Image-2512](https://hf-mirror.com/Qwen/Qwen-Image-2512) |
 | **Qwen-Image-Edit-2511** | 图像编辑 | [hf-mirror.com/Qwen/Qwen-Image-Edit-2511](https://hf-mirror.com/Qwen/Qwen-Image-Edit-2511) |
+| **CogVideoX-5b** | 文生视频 | [hf-mirror.com/zai-org/CogVideoX-5b](https://hf-mirror.com/zai-org/CogVideoX-5b) |
+| **CogVideoX-5b-I2V** | 图生视频 | [hf-mirror.com/zai-org/CogVideoX-5b-I2V](https://hf-mirror.com/zai-org/CogVideoX-5b-I2V) |
 
 ```bash
 # 安装 huggingface-cli
@@ -42,9 +44,11 @@ export HF_ENDPOINT=https://hf-mirror.com
 # 下载模型
 huggingface-cli download Qwen/Qwen-Image-2512 --local-dir ./models/Qwen-Image-2512
 huggingface-cli download Qwen/Qwen-Image-Edit-2511 --local-dir ./models/Qwen-Image-Edit-2511
+huggingface-cli download zai-org/CogVideoX-5b --local-dir ./models/CogVideoX-5b
+huggingface-cli download zai-org/CogVideoX-5b-I2V --local-dir ./models/CogVideoX-5b-I2V
 ```
 
-> 💡 **提示**：两个模型合计约 30GB，请确保磁盘空间充足。
+> 💡 **提示**：两个模型合计约 150GB，请确保磁盘空间充足。
 
 ## 🚀 快速部署 (Docker)
 

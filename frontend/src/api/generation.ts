@@ -1,5 +1,5 @@
 import apiClient from './client'
-import type { TaskSubmitResponse, AspectRatios, TextToImageParams, ImageEditParams, BatchEditParams } from '@/types'
+import type { TaskSubmitResponse, AspectRatios, TextToImageParams, ImageEditParams, BatchEditParams, TextToVideoParams, ImageToVideoParams } from '@/types'
 
 export const generationApi = {
   // 获取支持的宽高比
@@ -61,6 +61,30 @@ export const generationApi = {
     const response = await apiClient.post('/image-edit/batch', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       responseType: params.async_mode !== false ? 'json' : 'blob',
+    })
+    return response.data
+  },
+
+  // 文生视频
+  textToVideo: async (params: TextToVideoParams): Promise<TaskSubmitResponse> => {
+    const response = await apiClient.post('/generate/text-to-video', params)
+    return response.data
+  },
+
+  // 图生视频
+  imageToVideo: async (params: ImageToVideoParams): Promise<TaskSubmitResponse> => {
+    const formData = new FormData()
+    formData.append('prompt', params.prompt)
+    if (params.image) formData.append('image', params.image)
+    if (params.source_task_id) formData.append('source_task_id', params.source_task_id)
+    if (params.negative_prompt) formData.append('negative_prompt', params.negative_prompt)
+    if (params.num_frames) formData.append('num_frames', params.num_frames.toString())
+    if (params.num_inference_steps) formData.append('num_inference_steps', params.num_inference_steps.toString())
+    if (params.guidance_scale) formData.append('guidance_scale', params.guidance_scale.toString())
+    if (params.seed !== undefined) formData.append('seed', params.seed.toString())
+
+    const response = await apiClient.post('/generate/image-to-video', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
     })
     return response.data
   },

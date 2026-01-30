@@ -29,6 +29,18 @@ models:
       - "image editing"
       - "multi-image composition"
 
+  text_to_video:
+    name: "THUDM/CogVideoX-5b"
+    description: "CogVideoX-5B 文生视频模型"
+    capabilities:
+      - "text-to-video"
+
+  image_to_video:
+    name: "THUDM/CogVideoX-5b-I2V"
+    description: "CogVideoX-5B 图生视频模型"
+    capabilities:
+      - "image-to-video"
+
   # 模型存储目录
   models_dir: "./models"
 
